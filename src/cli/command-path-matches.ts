@@ -23,14 +23,18 @@ function normalizeCommandPathMatchRule(rule: CommandPathMatchRule): NormalizedCo
   return { pattern: rule.pattern, exact: rule.exact ?? false };
 }
 
+// 匹配命令配置。
 export function matchesCommandPath(
   commandPath: string[],
   pattern: readonly string[],
   params?: { exact?: boolean },
 ): boolean {
   if (pattern.some((segment, index) => commandPath[index] !== segment)) {
+    // 如果命令路径的前缀不匹配模式，则返回 false。
     return false;
   }
+  // 如果是精确匹配，则命令路径的长度必须与模式的长度相同；
+  // 否则，命令路径可以有更多的段。
   return !params?.exact || commandPath.length === pattern.length;
 }
 

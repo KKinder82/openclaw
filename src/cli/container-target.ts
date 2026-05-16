@@ -29,29 +29,43 @@ type ContainerRuntimeExec = {
 
 const CONTAINER_ALLOW_LOOPBACK_PROXY_URL_ENV = "OPENCLAW_CONTAINER_ALLOW_LOOPBACK_PROXY_URL";
 
+// 处理 CLI 容器目标，
+// 如果 argv 中包含 --container 参数或者环境变量 OPENCLAW_CONTAINER 被设置，
 export function parseCliContainerArgs(argv: string[]): CliContainerParseResult {
   let container: string | null = null;
 
   const scanned = scanCliRootOptions(argv, ({ arg, args, index }) => {
     if (arg === "--container" || arg.startsWith("--container=")) {
       const next = args[index + 1];
+      // 获取选项值，支持两种格式：--container=value 或 --container value
       const { value, consumedNext } = takeCliRootOptionValue(arg, next);
       if (!value) {
+        // 通知 scanCliRootOptions，出错
         return { kind: "error", error: "--container requires a value" };
       }
+      // 容器名称
       container = value;
-      return { kind: "handled", consumedNext };
+      //通知  scanCliRootOptions，成功处理了这个选项，告诉扫描器继续扫描剩余的参数。
+      return { kind: "handled", consumedNext }; // { kind: "handled", consumedNext: consumedNext }
     }
+    // 通知  scanCliRootOptions，没有处理，由 scanCliRootOptions处理。
     return { kind: "pass" };
   });
 
   if (!scanned.ok) {
+    // 不成功，则返回
     return scanned;
   }
-
+  // 重新包装再返回。
+  // 相当于 return { ok: true, container: container, argv: scanned.argv };
+  // 返回值有三部分：ok 表示解析成功，container 是解析到的容器名称（如果有的话），argv 是扫描处理后的剩余参数数组。
   return { ok: true, container, argv: scanned.argv };
 }
 
+// 解析 CLI 容器目标，优先级：
+// 1. argv 中的 --container 参数
+// 2. 环境变量 OPENCLAW_CONTAINER
+// 如果都没有，则返回 null。
 export function resolveCliContainerTarget(
   argv: string[],
   env: NodeJS.ProcessEnv = process.env,
@@ -63,6 +77,7 @@ export function resolveCliContainerTarget(
   return parsed.container ?? normalizeOptionalString(env.OPENCLAW_CONTAINER) ?? null;
 }
 
+// 判断指定的容器是否正在运行, 通过执行类似 "docker inspect --format {{.State.Running}}" 的命令来检查容器状态。
 function isContainerRunning(params: {
   exec: ContainerRuntimeExec;
   containerName: string;
@@ -93,8 +108,12 @@ function candidateContainerRuntimes(): ContainerRuntimeExec[] {
   ];
 }
 
+// 解析 当前是不是在 容器中运行
+// 1. argv 中的 --container 参数
+// 2. 环境变量 OPENCLAW_CONTAINER
+// 如果都没有，则返回 null。
 function resolveRunningContainer(params: {
-  containerName: string;
+  containerName: string; // 指定容器名称
   env: NodeJS.ProcessEnv;
   deps: Pick<ContainerTargetDeps, "spawnSync">;
 }): (ContainerRuntimeExec & { containerName: string }) | null {
@@ -229,8 +248,13 @@ function buildContainerExecEnv(env: NodeJS.ProcessEnv): NodeJS.ProcessEnv {
   return next;
 }
 
+// 可能是在容器中运行 CLI，
+// 如果 argv 中包含 --container 参数或者环境变量 OPENCLAW_CONTAINER 被设置，
+// 则尝试在容器中执行 CLI 命令，并返回执行结果；
 function isBlockedContainerCommand(argv: string[]): boolean {
   if (resolveCliArgvInvocation(["node", "openclaw", ...argv]).primary === "update") {
+    // 如果命令行参数中包含 "update" 主命令，则返回 true，
+    // 指示这是一个被阻止的容器命令，因为在容器中执行更新操作可能不受支持或不安全。
     return true;
   }
   for (let i = 0; i < argv.length; i += 1) {
@@ -239,6 +263,7 @@ function isBlockedContainerCommand(argv: string[]): boolean {
       return false;
     }
     if (arg === "--update") {
+      // 如果命令行参数中包含 "--update" 选项，则返回 true，
       return true;
     }
     const consumedRootOption = consumeRootOptionToken(argv, i);
@@ -253,6 +278,8 @@ function isBlockedContainerCommand(argv: string[]): boolean {
   return false;
 }
 
+// 可能是在容器中运行 CLI，
+// 如果 argv 中包含 --container 参数或者环境变量 OPENCLAW_CONTAINER 被设置，
 export function maybeRunCliInContainer(
   argv: string[],
   deps?: Partial<ContainerTargetDeps>,
@@ -270,13 +297,18 @@ export function maybeRunCliInContainer(
 
   const parsed = parseCliContainerArgs(argv);
   if (!parsed.ok) {
+    // 解析错误，抛出异常，CLI 启动流程会捕获这个异常并输出错误信息后退出。
     throw new Error(parsed.error);
   }
   const containerName = resolveCliContainerTarget(argv, resolvedDeps.env);
   if (!containerName) {
+    // 不运行在容器中，继续正常的 CLI 启动流程，返回 handled: false 和原始 argv 以供后续处理。
     return { handled: false, argv: parsed.argv };
   }
+  // 运行在容器中，尝试在容器中执行 CLI 命令，并返回执行结果。
   if (isBlockedContainerCommand(parsed.argv.slice(2))) {
+    // 如果这是一个被阻止的容器命令（例如包含 "update" 主命令或 "--update" 选项），
+    // 则抛出异常，提示用户这个命令不支持在容器中运行。
     throw new Error(
       "openclaw update is not supported with --container; rebuild or restart the container image instead.",
     );
@@ -288,6 +320,7 @@ export function maybeRunCliInContainer(
     deps: resolvedDeps,
   });
   if (!runningContainer) {
+    // 没有找到正在运行的容器，抛出异常，提示用户没有找到匹配的容器。
     throw new Error(`No running container matched "${containerName}" under podman or docker.`);
   }
 
@@ -306,6 +339,7 @@ export function maybeRunCliInContainer(
       env: buildContainerExecEnv(resolvedDeps.env),
     },
   );
+  // 运行完成。
   return {
     handled: true,
     exitCode: typeof result.status === "number" ? result.status : 1,

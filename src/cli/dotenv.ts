@@ -4,6 +4,7 @@ import { loadGlobalRuntimeDotEnvFiles, loadWorkspaceDotEnvFile } from "../infra/
 
 export function loadCliDotEnv(opts?: { quiet?: boolean }) {
   const quiet = opts?.quiet ?? true;
+  //工作路径
   const cwdEnvPath = path.join(process.cwd(), ".env");
   loadWorkspaceDotEnvFile(cwdEnvPath, { quiet });
 

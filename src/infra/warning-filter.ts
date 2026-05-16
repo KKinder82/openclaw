@@ -12,6 +12,7 @@ type ProcessWarningInstallState = {
   installed: boolean;
 };
 
+// 过滤掉 Node.js 内部已废弃但仍存在的警告，避免干扰用户。
 export function shouldIgnoreWarning(warning: ProcessWarning): boolean {
   if (warning.code === "DEP0040" && warning.message?.includes("punycode")) {
     return true;
@@ -28,6 +29,9 @@ export function shouldIgnoreWarning(warning: ProcessWarning): boolean {
   return false;
 }
 
+// Node.js 的 `process.aemitWrning` 支持多种调用方式，
+// 以下函数将这些不同的调用方式规范化为一个统一的 `ProcessWarning` 对象，
+// 方便后续过滤逻辑使用。
 function normalizeWarningArgs(args: unknown[]): ProcessWarning {
   const warningArg = args[0];
   const secondArg = args[1];
@@ -64,6 +68,7 @@ function normalizeWarningArgs(args: unknown[]): ProcessWarning {
   return { name, code, message };
 }
 
+// 安装全局的 `process.emitWarning` 包装器，过滤掉不需要的警告。
 export function installProcessWarningFilter(): void {
   const state = resolveGlobalSingleton<ProcessWarningInstallState>(warningFilterKey, () => ({
     installed: false,
@@ -73,6 +78,9 @@ export function installProcessWarningFilter(): void {
   }
 
   const originalEmitWarning = process.emitWarning.bind(process);
+  // 自定义的 `emitWarning`
+  // 包装器会先检查是否应该忽略当前警告，
+  // 如果是，则直接返回；否则，按照原有的逻辑发出警告。
   const wrappedEmitWarning: typeof process.emitWarning = ((...args: unknown[]) => {
     if (shouldIgnoreWarning(normalizeWarningArgs(args))) {
       return;
@@ -91,6 +99,7 @@ export function installProcessWarningFilter(): void {
       process.emit("warning", emitted);
       return;
     }
+    // 对于其他调用方式，直接调用原始的 `emitWarning`。
     Reflect.apply(originalEmitWarning, process, args);
     return;
   }) as typeof process.emitWarning;

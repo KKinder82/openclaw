@@ -202,13 +202,15 @@ type ShellEnvFallbackResult =
 type ShellEnvFallbackOptions = {
   enabled: boolean;
   env: NodeJS.ProcessEnv;
-  expectedKeys: string[];
+  expectedKeys: string[]; // 希望的
   logger?: Pick<typeof console, "warn">;
   timeoutMs?: number;
   exec?: typeof execFileSync;
 };
 
+// 判断一个环境变量是否显式的指定
 function hasExplicitEnvBinding(env: NodeJS.ProcessEnv, key: string): boolean {
+  // 是否有指定的属性（即使值是空字符串或其他假值，也算是显式指定了）
   return Object.prototype.hasOwnProperty.call(env, key);
 }
 
@@ -216,10 +218,15 @@ export function loadShellEnvFallback(opts: ShellEnvFallbackOptions): ShellEnvFal
   const logger = opts.logger ?? console;
 
   if (!opts.enabled) {
+    // 不启用 Shell 环境回退机制时，
+    // 不应用任何环境变量，并返回一个明确的结果，指示回退被禁用。
     lastAppliedKeys = [];
     return { ok: true, applied: [], skippedReason: "disabled" };
   }
 
+  // 返回没有被覆盖的环境变量列表，
+  // 如果所有期望的环境变量都已经存在于 process.env 中，则不执行回退，
+  // 并返回一个明确的结果，指示回退被跳过的原因是已经有了这些键。
   const missingExpectedKeys = opts.expectedKeys.filter(
     (key) => !hasExplicitEnvBinding(opts.env, key),
   );
@@ -253,10 +260,12 @@ export function loadShellEnvFallback(opts: ShellEnvFallbackOptions): ShellEnvFal
   return { ok: true, applied };
 }
 
+// 仅供测试使用，是否启用 Shell 环境回退机制。
 export function shouldEnableShellEnvFallback(env: NodeJS.ProcessEnv): boolean {
   return isTruthyEnvValue(env.OPENCLAW_LOAD_SHELL_ENV);
 }
 
+// 仅供测试使用，是否推迟 Shell 环境回退机制的执行时机。
 export function shouldDeferShellEnvFallback(env: NodeJS.ProcessEnv): boolean {
   return isTruthyEnvValue(env.OPENCLAW_DEFER_SHELL_ENV_FALLBACK);
 }

@@ -262,6 +262,7 @@ function backfillSessionKey(params: {
   if (trimmed) {
     return trimmed;
   }
+  
   if (!params.config || !params.sessionId) {
     return undefined;
   }
@@ -300,6 +301,7 @@ function buildHandledReplyPayloads(reply?: ReplyPayload) {
   ];
 }
 
+// 运行 PI agent 的主函数，接受一个参数对象，返回一个包含 agent 回复内容和元信息的结果对象。
 export async function runEmbeddedPiAgent(
   params: RunEmbeddedPiAgentParams,
 ): Promise<EmbeddedPiRunResult> {

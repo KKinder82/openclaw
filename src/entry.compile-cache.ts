@@ -4,12 +4,15 @@ import { enableCompileCache, getCompileCacheDir } from "node:module";
 import os from "node:os";
 import path from "node:path";
 
+// 返回entryFile所在目录
+// 安装 entryFile所在目录为 dist或src 时，则返回 dist或src的父目录
 export function resolveEntryInstallRoot(entryFile: string): string {
-  const entryDir = path.dirname(entryFile);
-  const entryParent = path.basename(entryDir);
+  const entryDir = path.dirname(entryFile); //整个目录（不是目录名称）
+  const entryParent = path.basename(entryDir); // 文件(夹)名
   return entryParent === "dist" || entryParent === "src" ? path.dirname(entryDir) : entryDir;
 }
 
+// 是否不是源代码的根目录
 export function isSourceCheckoutInstallRoot(installRoot: string): boolean {
   return (
     existsSync(path.join(installRoot, ".git")) ||
@@ -25,13 +28,16 @@ function isNodeCompileCacheRequested(env: NodeJS.ProcessEnv | undefined): boolea
   return env?.NODE_COMPILE_CACHE !== undefined && !isNodeCompileCacheDisabled(env);
 }
 
+// 应不应当启用 OpenClaw 编译缓存：
 export function shouldEnableOpenClawCompileCache(params: {
   env?: NodeJS.ProcessEnv;
   installRoot: string;
 }): boolean {
   if (isNodeCompileCacheDisabled(params.env)) {
+    // 显式禁用编译缓存，无论其他条件如何，都不启用。
     return false;
   }
+  // 如果是源文件目录，则也不应当启用；
   return !isSourceCheckoutInstallRoot(params.installRoot);
 }
 
@@ -58,6 +64,9 @@ function readPackageVersion(packageJsonPath: string): string {
   return "unknown";
 }
 
+//解析 CLI 容器目标（如果有的话），
+// 例如 `openclaw gateway`，
+// 并返回一个表示目标类型的字符串（如 "gateway"）或 null（如果没有特定目标）。
 export function resolveOpenClawCompileCacheDirectory(params: {
   env?: NodeJS.ProcessEnv;
   installRoot: string;
@@ -90,6 +99,9 @@ type OpenClawCompileCacheRespawnPlan = {
   env: NodeJS.ProcessEnv;
 };
 
+// 根据当前环境和安装根目录构建一个重启计划，
+// 如果需要禁用编译缓存以确保兼容性或正确性，
+// 则返回一个包含重启命令、参数和环境变量的计划对象；否则返回 undefined 表示不需要重启。
 export function buildOpenClawCompileCacheRespawnPlan(params: {
   currentFile: string;
   env?: NodeJS.ProcessEnv;
@@ -101,12 +113,16 @@ export function buildOpenClawCompileCacheRespawnPlan(params: {
 }): OpenClawCompileCacheRespawnPlan | undefined {
   const env = params.env ?? process.env;
   if (!isSourceCheckoutInstallRoot(params.installRoot)) {
+    // 不是源代码安装根目录，通常意味着已发布的安装包或全局安装，这些环境通常兼容编译缓存，因此不需要重启。
     return undefined;
   }
   if (env.OPENCLAW_SOURCE_COMPILE_CACHE_RESPAWNED === "1") {
+    // 已经重启过一次以禁用编译缓存，但仍然在源代码安装根目录，可能是因为编译缓存不兼容或存在其他问题。
     return undefined;
   }
   if (!params.compileCacheDir && !isNodeCompileCacheRequested(env)) {
+    // 没有明确的编译缓存目录，且当前环境没有请求启用 Node.js 内置的编译缓存，
+    // 说明不需要重启来禁用编译缓存。
     return undefined;
   }
   const nextEnv: NodeJS.ProcessEnv = {
@@ -136,8 +152,10 @@ export function respawnWithoutOpenClawCompileCacheIfNeeded(params: {
     compileCacheDir: getCompileCacheDir?.(),
   });
   if (!plan) {
+    // 不需要重启，继续正常启动流程。
     return false;
   }
+  // 重启
   const result = spawnSync(plan.command, plan.args, {
     stdio: "inherit",
     env: plan.env,
@@ -154,9 +172,11 @@ export function enableOpenClawCompileCache(params: {
   installRoot: string;
 }): void {
   if (!shouldEnableOpenClawCompileCache(params)) {
+    // 不应当启用编译缓存，直接返回继续正常启动流程。
     return;
   }
   try {
+    //启用编译缓存，并将缓存目录设置为基于安装根目录的特定路径，以避免不同安装之间的缓存冲突。
     enableCompileCache(resolveOpenClawCompileCacheDirectory(params));
   } catch {
     // Best-effort only; never block startup.

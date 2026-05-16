@@ -9,7 +9,7 @@ import { SUB_CLI_DESCRIPTORS } from "./program/subcli-descriptors.js";
 
 const HELP_FLAGS = new Set(["-h", "--help"]);
 const VERSION_FLAGS = new Set(["-V", "--version"]);
-const ROOT_VERSION_ALIAS_FLAG = "-v";
+const ROOT_VERSION_ALIAS_FLAG = "-v"; // 作为 --version 的别名，提供更简短的选项形式，方便用户快速查看版本信息。
 const ROOT_COMMAND_DESCRIPTORS = [...CORE_CLI_COMMAND_DESCRIPTORS, ...SUB_CLI_DESCRIPTORS];
 const KNOWN_ROOT_COMMANDS: ReadonlySet<string> = new Set(
   ROOT_COMMAND_DESCRIPTORS.map((descriptor) => descriptor.name),
@@ -26,8 +26,13 @@ export function hasHelpOrVersion(argv: string[]): boolean {
   );
 }
 
+// 判断是否是根帮助调用
+// 如果 argv 中包含 --help 参数或者 -h 参数，并且这些参数不是某个子命令的选项参数，
+// 或者有 -v 参数（作为 --version 的别名），则认为这是一个根帮助调用，应该直接输出帮助信息并退出，而不需要加载和启动整个 CLI 应用。
+
 export function isHelpOrVersionInvocation(argv: string[]): boolean {
   if (hasRootVersionAlias(argv)) {
+    // 如果包含 -v 参数（作为 --version 的别名），则认为这是一个根版本调用，应该直接输出版本信息并退出，而不需要加载和启动整个 CLI 应用。
     return true;
   }
 
@@ -37,6 +42,7 @@ export function isHelpOrVersionInvocation(argv: string[]): boolean {
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (!arg || arg === FLAG_TERMINATOR) {
+      // 遇到选项终止符 --，停止解析。
       break;
     }
     const rootConsumed = consumeRootOptionToken(args, i);
@@ -45,19 +51,27 @@ export function isHelpOrVersionInvocation(argv: string[]): boolean {
       continue;
     }
     if (HELP_FLAGS.has(arg) || VERSION_FLAGS.has(arg)) {
+      // 包含 --help 参数或者 -h 参数，
+      // 包含 --version 参数或者 -V 参数，
       return true;
     }
     if (arg.startsWith("-")) {
+      // 跳过选项参数。
       sawCommandOption = true;
       continue;
     }
+    // 位置参数
     positionals.push(arg);
     if (arg !== "help") {
       continue;
     }
+    // 也就是说，如果遇到 help 位置参数，
+    // 那么如果之前已经遇到过选项参数，那么后续的 help 可能是某个子命令的选项参数，而不是根帮助调用。
     if (sawCommandOption) {
+      // 如果己经遇到过 选项参数，那么后续的 help 可能是某个子命令的选项参数，而不是根帮助调用。
       return false;
     }
+    // 如果没有遇到过选项参数，那么 help 位置参数可能是根帮助调用，
     if (positionals.length === 1) {
       return true;
     }
@@ -105,6 +119,7 @@ export function hasRootVersionAlias(argv: string[]): boolean {
       continue;
     }
     if (arg === FLAG_TERMINATOR) {
+      // 遇到选项终止符 --，停止解析。
       break;
     }
     if (arg === ROOT_VERSION_ALIAS_FLAG) {
@@ -128,6 +143,9 @@ export function isRootVersionInvocation(argv: string[]): boolean {
   return isRootInvocationForFlags(argv, VERSION_FLAGS, { includeVersionAlias: true });
 }
 
+// 判断是否是全局调用，
+// 如果 argv 中包含 --version 参数或者 -v 参数，并且这些参数不是某个子命令的选项参数，
+// 则认为这是一个根版本调用，应该直接输出版本信息并退出，而不需要加载和启动整个 CLI 应用。
 function isRootInvocationForFlags(
   argv: string[],
   targetFlags: Set<string>,
@@ -138,9 +156,11 @@ function isRootInvocationForFlags(
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (!arg) {
+      // 跳过空参数。
       continue;
     }
     if (arg === FLAG_TERMINATOR) {
+      // 遇到全局选项终止符 --，停止解析。
       break;
     }
     if (
@@ -161,6 +181,7 @@ function isRootInvocationForFlags(
   return hasTarget;
 }
 
+// 判断是否是根帮助调用，
 export function isRootHelpInvocation(argv: string[]): boolean {
   return isRootInvocationForFlags(argv, HELP_FLAGS);
 }
@@ -202,30 +223,39 @@ export function getPositiveIntFlagValue(argv: string[], name: string): number | 
   return parsePositiveInt(raw);
 }
 
+// 获取命令路径，包含根级选项（即全局选项），以便在某些情况下需要考虑全局选项对命令解析的影响。
 export function getCommandPath(argv: string[], depth = 2): string[] {
   return getCommandPathInternal(argv, depth, { skipRootOptions: false });
 }
 
+// 获取命令路径，跳过根级选项（即全局选项），以便更准确地识别子命令和位置参数。
 export function getCommandPathWithRootOptions(argv: string[], depth = 2): string[] {
   return getCommandPathInternal(argv, depth, { skipRootOptions: true });
 }
 
+// 内部函数用于解析命令路径，根据是否跳过根级选项来调整解析逻辑。
+// CommandPath 的解析会从 argv 中提取非选项参数 （即不以 "-" 开头的参数），
+// 并根据指定的深度返回前几个命令路径组件。
 function getCommandPathInternal(
   argv: string[],
-  depth: number,
+  depth: number, // 返回数量
   opts: { skipRootOptions: boolean },
 ): string[] {
-  const args = argv.slice(2);
+  const args = argv.slice(2); // 从第3个参数开始解析，前两个通常是 node 和脚本路径
   const path: string[] = [];
   for (let i = 0; i < args.length; i += 1) {
     const arg = args[i];
     if (!arg) {
+      // 跳过空参数。
       continue;
     }
     if (arg === "--") {
+      // 遇到选项终止符，停止解析命令路径。
       break;
     }
     if (opts.skipRootOptions) {
+      // 如果启用跳过根级选项，
+      // 则在解析命令路径时会忽略全局选项（即根级选项），以便更准确地识别子命令和位置参数。
       const consumed = consumeRootOptionToken(args, i);
       if (consumed > 0) {
         i += consumed - 1;
@@ -233,16 +263,19 @@ function getCommandPathInternal(
       }
     }
     if (arg.startsWith("-")) {
+      // 跳过选项参数。
       continue;
     }
     path.push(arg);
     if (path.length >= depth) {
+      // 达到指定深度，停止解析。
       break;
     }
   }
   return path;
 }
 
+// 获取主要命令 第一个
 export function getPrimaryCommand(argv: string[]): string | null {
   const [primary] = getCommandPathWithRootOptions(argv, 1);
   return primary ?? null;

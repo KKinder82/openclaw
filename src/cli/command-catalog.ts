@@ -5,15 +5,20 @@ export type CliCommandPluginLoadPolicy =
   | "always"
   | "text-only"
   | ((ctx: { argv: string[]; commandPath: string[]; jsonOutputMode: boolean }) => boolean);
-type CliRouteConfigGuardPolicy = "never" | "always" | "when-suppressed";
+
+  type CliRouteConfigGuardPolicy = "never" | "always" | "when-suppressed";
+
 export type CliPluginRegistryScope = "all" | "channels" | "configured-channels";
+
 export type CliPluginRegistryPolicy = {
   scope: CliPluginRegistryScope;
 };
+
 export type CliNetworkProxyPolicy = "default" | "bypass";
 type CliNetworkProxyPolicyResolver =
   | CliNetworkProxyPolicy
   | ((ctx: { argv: string[]; commandPath: string[] }) => CliNetworkProxyPolicy);
+
 type CliRoutedCommandId =
   | "health"
   | "status"
@@ -49,6 +54,7 @@ export type CliCommandCatalogEntry = {
   };
 };
 
+// CLI 命令目录，包含了所有 CLI 命令路径及其对应的策略配置。
 export const cliCommandCatalog: readonly CliCommandCatalogEntry[] = [
   {
     commandPath: ["crestodian"],

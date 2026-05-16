@@ -194,14 +194,18 @@ export function resolveNodeManagerOptions(): Array<{
 
 export async function moveToTrash(pathname: string, runtime: RuntimeEnv): Promise<void> {
   if (!pathname) {
+    // 没有指定路径，无法移动到垃圾箱，直接返回。
     return;
   }
   try {
+    // 检查指定路径是否存在，
+    // 如果不存在，则无法移动到垃圾箱，直接返回。
     await fs.access(pathname);
   } catch {
     return;
   }
   try {
+    // trash 是一个跨平台的命令行工具，用于将文件或目录移动到操作系统的垃圾箱。
     await runCommandWithTimeout(["trash", pathname], { timeoutMs: 5000 });
     runtime.log(`Moved to Trash: ${shortenHomePath(pathname)}`);
   } catch {

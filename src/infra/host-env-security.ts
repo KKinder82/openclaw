@@ -1,7 +1,9 @@
 import { HOST_ENV_SECURITY_POLICY } from "./host-env-security-policy.js";
 import { markOpenClawExecEnv } from "./openclaw-exec-env.js";
 
+// 跨平台的环境变量键验证正则表达式，
 const PORTABLE_ENV_VAR_KEY = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// 是 Windows 兼容版本的环境变量键名验证规则，在之前 POSIX 标准的基础上增加了对括号 () 的支持。
 const WINDOWS_COMPAT_OVERRIDE_ENV_VAR_KEY = /^[A-Za-z_][A-Za-z0-9_()]*$/;
 
 const HOST_DANGEROUS_ENV_KEY_VALUES: readonly string[] = Object.freeze([
@@ -67,9 +69,11 @@ type HostExecEnvOverrideDiagnostics = {
   rejectedOverrideInvalidKeys: string[];
 };
 
+// 标准化环境变量键名称，
+// - 去除多余的空白，并根据需要验证其是否符合可移植性要求（仅包含字母、数字和下划线，且不能以数字开头）。
 export function normalizeEnvVarKey(
   rawKey: string,
-  options?: { portable?: boolean },
+  options?: { portable?: boolean }, // 是否要求键符合可移植性规范，默认为 false
 ): string | null {
   const key = rawKey.trim();
   if (!key) {
@@ -81,6 +85,8 @@ export function normalizeEnvVarKey(
   return key;
 }
 
+// 标准化环境变量键名称，
+// 允许 Windows 兼容的键名（在之前 POSIX 标准的基础上增加了对括号 () 的支持），
 export function normalizeHostOverrideEnvVarKey(rawKey: string): string | null {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {
@@ -92,6 +98,8 @@ export function normalizeHostOverrideEnvVarKey(rawKey: string): string | null {
   return null;
 }
 
+// 判断给定的 环境变量键名 是否被认为是危险的，
+// 是主机环境名称。
 export function isDangerousHostEnvVarName(rawKey: string): boolean {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {
@@ -104,6 +112,8 @@ export function isDangerousHostEnvVarName(rawKey: string): boolean {
   return HOST_DANGEROUS_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 
+// 判断给定的 环境变量键名 是否被认为是危险的，
+// 被主要继承到子进程中并影响其行为，从而破坏系统的安全边界。
 export function isDangerousHostInheritedEnvVarName(rawKey: string): boolean {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {
@@ -116,6 +126,8 @@ export function isDangerousHostInheritedEnvVarName(rawKey: string): boolean {
   return HOST_DANGEROUS_INHERITED_ENV_PREFIXES.some((prefix) => upper.startsWith(prefix));
 }
 
+// 判断给定的 环境变量键名 是否被认为是危险的，
+// 是主机环境覆盖变量名称，可能会被代理或其他系统组件用来覆盖主机环境中的变量。
 export function isDangerousHostEnvOverrideVarName(rawKey: string): boolean {
   const key = normalizeEnvVarKey(rawKey);
   if (!key) {

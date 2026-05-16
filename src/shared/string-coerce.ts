@@ -2,6 +2,8 @@ export function readStringValue(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
 }
 
+// 规范化可选字符串，
+// 返回 字符串 或 null。
 export function normalizeNullableString(value: unknown): string | null {
   if (typeof value !== "string") {
     return null;
@@ -10,10 +12,13 @@ export function normalizeNullableString(value: unknown): string | null {
   return trimmed ? trimmed : null;
 }
 
+// 规范化 可选字符串，
+// 返回 字符串 或 undefined。
 export function normalizeOptionalString(value: unknown): string | undefined {
   return normalizeNullableString(value) ?? undefined;
 }
 
+// 规范化 可选字符串，
 export function normalizeStringifiedOptionalString(value: unknown): string | undefined {
   if (typeof value === "string") {
     return normalizeOptionalString(value);

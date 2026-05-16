@@ -49,11 +49,15 @@ const noopReporter: ProgressReporter = {
   done: () => {},
 };
 
+// 创建一个 CLI 进度报告器，
+// 根据提供的选项自动选择适当的显示方式（如 OSC 进度条、行内更新、日志输出或无显示）。
 export function createCliProgress(options: ProgressOptions): ProgressReporter {
   if (options.enabled === false) {
+    // 明确禁用进度显示时，直接返回一个空操作的报告器。
     return noopReporter;
   }
   if (activeProgress > 0) {
+    // 已经有一个活跃的进度显示时，为了避免混乱，新的进度显示将退回到日志输出模式。
     return noopReporter;
   }
 

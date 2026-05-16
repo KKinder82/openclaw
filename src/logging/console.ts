@@ -105,12 +105,14 @@ export function routeLogsToStderr(): void {
   loggingState.forceConsoleToStderr = true;
 }
 
+// 设置控制台日志的子系统过滤器，
 export function setConsoleSubsystemFilter(filters?: string[] | null): void {
   if (!filters || filters.length === 0) {
     loggingState.consoleSubsystemFilter = null;
     return;
   }
-  const normalized = filters.map((value) => value.trim()).filter((value) => value.length > 0);
+  const normalized = filters.map((value) => value.trim()).filter((value) => value.length > 0); // 规范化过滤器列表，去除前后空白，并过滤掉空字符串。
+  // 如果规范化后的过滤器列表为空，则设置为 null，表示不进行子系统过滤。
   loggingState.consoleSubsystemFilter = normalized.length > 0 ? normalized : null;
 }
 

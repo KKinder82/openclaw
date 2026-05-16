@@ -17,9 +17,11 @@ export async function resolveWorkspaceTemplateDir(opts?: {
   moduleUrl?: string;
 }): Promise<string> {
   if (cachedTemplateDir) {
+    // 如果已经缓存了模板目录，直接返回缓存的值。
     return cachedTemplateDir;
   }
   if (resolvingTemplateDir) {
+    // 如果正在解析模板目录，等待解析完成后返回结果。
     return resolvingTemplateDir;
   }
 

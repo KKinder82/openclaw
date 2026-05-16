@@ -1,6 +1,9 @@
 import { isRootVersionInvocation } from "./cli/argv.js";
 import { resolveCliContainerTarget } from "./cli/container-target.js";
 
+// 处理 CLI 根版本快速路径，
+// 如果 argv 中包含 --version 参数或者环境变量 OPENCLAW_VERSION 被设置，
+// 则直接输出版本信息并退出，而不需要加载和启动整个 CLI 应用。
 export function tryHandleRootVersionFastPath(
   argv: string[],
   deps: {

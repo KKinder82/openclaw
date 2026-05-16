@@ -17,6 +17,7 @@ export function canSkipGatewayConfigLoad(params: {
   );
 }
 
+// 判断 命令路径是 绕过网关配置加载的命令路径
 export function isGatewayConfigBypassCommandPath(commandPath: readonly string[]): boolean {
   return commandPath[0] === "cron";
 }

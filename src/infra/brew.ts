@@ -34,6 +34,8 @@ function resolveBrewFromPath(pathEnv = process.env.PATH): string | undefined {
   return undefined;
 }
 
+// 解析 Homebrew 的安装路径，（Homebrew 是linux下的包管理器）
+// 包括 Linuxbrew 和 macOS 上的默认路径，以及 PATH 环境变量中可能存在的路径。
 export function resolveBrewPathDirs(opts?: BrewResolutionOptions): string[] {
   const homeDir = opts?.homeDir ?? os.homedir();
 

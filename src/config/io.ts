@@ -242,6 +242,9 @@ export class ConfigRuntimeRefreshError extends Error {
   }
 }
 
+// 计算配置快照的哈希值，使用 SHA-256 算法，
+// 输入为配置的原始字符串内容，
+// 输出为哈希值的十六进制表示。
 function hashConfigRaw(raw: string | null): string {
   return crypto
     .createHash("sha256")
@@ -275,6 +278,7 @@ async function tightenStateDirPermissionsIfNeeded(params: {
   }
 }
 
+// 解析配置快照的哈希值，
 export function resolveConfigSnapshotHash(snapshot: {
   hash?: string;
   raw?: string | null;
@@ -282,10 +286,13 @@ export function resolveConfigSnapshotHash(snapshot: {
   if (typeof snapshot.hash === "string") {
     const trimmed = snapshot.hash.trim();
     if (trimmed) {
+      // 如果提示了哈希值，则使用它，
+      // 不管 raw 是什么，甚至如果 raw 是无效的，这样可以让调用者信任他们之前计算的哈希值，而不需要担心快照中是否包含原始内容。
       return trimmed;
     }
   }
   if (typeof snapshot.raw !== "string") {
+    // 如果没有提供原始内容，则无法计算哈希值，返回 null。
     return null;
   }
   return hashConfigRaw(snapshot.raw);
@@ -964,6 +971,7 @@ function resolveConfigPathForDeps(deps: Required<ConfigIoDeps>): string {
   return resolveConfigPath(deps.env, resolveStateDir(deps.env, deps.homedir));
 }
 
+// 规范化 依赖项
 function normalizeDeps(overrides: ConfigIoDeps = {}): Required<ConfigIoDeps> {
   return {
     fs: overrides.fs ?? fs,
@@ -977,6 +985,7 @@ function normalizeDeps(overrides: ConfigIoDeps = {}): Required<ConfigIoDeps> {
   };
 }
 
+// 根据需要，在从.env 中加载环境配置。
 function maybeLoadDotEnvForConfig(env: NodeJS.ProcessEnv): void {
   // Only hydrate dotenv for the real process env. Callers using injected env
   // objects (tests/diagnostics) should stay isolated.
@@ -1185,6 +1194,7 @@ async function finalizeReadConfigSnapshotInternalResult(
   return result;
 }
 
+// 同步版本，observeConfigSnapshotSync 在 observeConfigSnapshot 中的同步实现
 export function createConfigIO(
   overrides: ConfigIoDeps & { pluginValidation?: "full" | "skip" } = {},
 ) {
@@ -1464,7 +1474,9 @@ export function createConfigIO(
     try {
       maybeLoadDotEnvForConfig(deps.env);
       if (!deps.fs.existsSync(configPath)) {
+        // 配置文件不存在，返回一个空配置对象
         if (shouldEnableShellEnvFallback(deps.env) && !shouldDeferShellEnvFallback(deps.env)) {
+          // 在没有配置文件的情况下启用 shell 环境变量回退，以确保环境变量仍然可用
           loadShellEnvFallback({
             enabled: true,
             env: deps.env,
@@ -1598,14 +1610,17 @@ export function createConfigIO(
     }
   }
 
+  // 读取配置文件快照的
   async function readConfigFileSnapshotInternal(
     options: {
-      persistShippedPluginInstallMigration?: boolean;
+      persistShippedPluginInstallMigration?: boolean; // 是否持久化，系统插件的安装记录迁移到插件索引中，默认为true
     } = {},
   ): Promise<ReadConfigFileSnapshotInternalResult> {
     maybeLoadDotEnvForConfig(deps.env);
+    // 文件是否存在的快速路径，避免不必要的文件读取和解析开销
     const exists = deps.fs.existsSync(configPath);
     if (!exists) {
+      // 不存在，返回一个空的快照
       const hash = hashConfigRaw(null);
       const config = {};
       const legacyIssues: LegacyConfigIssue[] = [];
@@ -1894,6 +1909,8 @@ export function createConfigIO(
     };
   }
 
+  // 最佳努力读取配置快照，不抛出错误，读取失败时返回空配置，
+  // 供配置编辑器使用以实现尽可能多的功能，同时避免因配置问题导致编辑器不可用。
   async function readBestEffortConfig(): Promise<OpenClawConfig> {
     const result = await readConfigFileSnapshotInternal();
     if (!result.snapshot.valid) {

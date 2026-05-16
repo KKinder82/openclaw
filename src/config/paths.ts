@@ -57,6 +57,9 @@ export function resolveNewStateDir(homedir: () => string = resolveDefaultHomeDir
  * Can be overridden via OPENCLAW_STATE_DIR.
  * Default: ~/.openclaw
  */
+// 解析 CLI 状态目录，优先级：
+// 1. 环境变量 OPENCLAW_STATE_DIR
+// 2. 默认的 ~/.openclaw 目录
 export function resolveStateDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
@@ -64,15 +67,22 @@ export function resolveStateDir(
   const effectiveHomedir = () => resolveRequiredHomeDir(env, homedir);
   const override = env.OPENCLAW_STATE_DIR?.trim();
   if (override) {
+    // 如果 OPENCLAW_STATE_DIR 环境变量存在且不为空，则解析该路径并返回。
     return resolveUserPath(override, env, effectiveHomedir);
   }
+
+  // 创建一个新的状态目录路径，并检查是否存在。
+  // 如果存在，则直接返回该路径。
   const newDir = newStateDir(effectiveHomedir);
   if (env.OPENCLAW_TEST_FAST === "1") {
+    // 在测试快速模式下，直接返回默认的状态目录路径，不检查现有文件。
     return newDir;
   }
+  // 旧版本的状态目录路径列表，按照优先级顺序排列。
   const legacyDirs = legacyStateDirs(effectiveHomedir);
   const hasNew = fs.existsSync(newDir);
   if (hasNew) {
+    // 如果新的状态目录路径存在，直接返回该路径。
     return newDir;
   }
   const existingLegacy = legacyDirs.find((dir) => {
@@ -83,11 +93,15 @@ export function resolveStateDir(
     }
   });
   if (existingLegacy) {
+    // 如果存在旧版本的状态目录路径，返回第一个存在的路径。
     return existingLegacy;
   }
+  // 如果没有找到任何现有的状态目录路径，返回新的状态目录路径。
   return newDir;
 }
 
+// 解析 用户 Home路径。
+// ~ 开头的路径会被解析为用户 Home 目录，其他路径会被解析为绝对路径。
 function resolveUserPath(
   input: string,
   env: NodeJS.ProcessEnv = process.env,
@@ -143,14 +157,17 @@ export const STATE_DIR = resolveStateDir();
  * Can be overridden via OPENCLAW_CONFIG_PATH.
  * Default: ~/.openclaw/openclaw.json (or $OPENCLAW_STATE_DIR/openclaw.json)
  */
+// 解析配置文件路径，优先级：
 export function resolveCanonicalConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   stateDir: string = resolveStateDir(env, envHomedir(env)),
 ): string {
   const override = env.OPENCLAW_CONFIG_PATH?.trim();
   if (override) {
+    // 在用户目录下解析 OPENCLAW_CONFIG_PATH 环境变量指定的路径，并返回结果。
     return resolveUserPath(override, env, envHomedir(env));
   }
+  // 返回默认的配置文件路径，即状态目录下的 openclaw.json 文件。
   return path.join(stateDir, CONFIG_FILENAME);
 }
 
@@ -158,6 +175,7 @@ export function resolveCanonicalConfigPath(
  * Resolve the active config path by preferring existing config candidates
  * before falling back to the canonical path.
  */
+// 解析配置文件路径，优先级：
 export function resolveConfigPathCandidate(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = envHomedir(env),
@@ -174,6 +192,7 @@ export function resolveConfigPathCandidate(
     }
   });
   if (existing) {
+    // 如果存在配置文件候选路径中找到了一个存在的文件，则返回该路径。
     return existing;
   }
   return resolveCanonicalConfigPath(env, resolveStateDir(env, homedir));
@@ -182,6 +201,11 @@ export function resolveConfigPathCandidate(
 /**
  * Active config path (prefers existing config files).
  */
+// 解析配置文件路径，优先级：
+// 1. 环境变量 OPENCLAW_CONFIG_PATH 指定的路径（如果存在）
+// 2. $OPENCLAW_STATE_DIR 中存在的配置文件（openclaw.json 或 legacy 文件）
+// 3. 默认的 ~/.openclaw/openclaw.json 路径
+
 export function resolveConfigPath(
   env: NodeJS.ProcessEnv = process.env,
   stateDir: string = resolveStateDir(env, envHomedir(env)),
@@ -189,9 +213,11 @@ export function resolveConfigPath(
 ): string {
   const override = env.OPENCLAW_CONFIG_PATH?.trim();
   if (override) {
+    // 如果 OPENCLAW_CONFIG_PATH 环境变量存在且不为空，则解析该路径并返回。
     return resolveUserPath(override, env, homedir);
   }
   if (env.OPENCLAW_TEST_FAST === "1") {
+    // 在测试快速模式下，直接返回默认的配置路径，不检查现有文件。
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const stateOverride = env.OPENCLAW_STATE_DIR?.trim();
@@ -207,15 +233,21 @@ export function resolveConfigPath(
     }
   });
   if (existing) {
+    // 如果存在配置文件候选路径中找到了一个存在的文件，则返回该路径。
     return existing;
   }
   if (stateOverride) {
+    // 如果 OPENCLAW_STATE_DIR 环境变量存在且不为空，则解析该路径并返回默认的配置文件路径。
     return path.join(stateDir, CONFIG_FILENAME);
   }
   const defaultStateDir = resolveStateDir(env, homedir);
   if (path.resolve(stateDir) === path.resolve(defaultStateDir)) {
+    // stateDir 是参数传入的状态目录路径，
+    // defaultStateDir 是根据环境变量和默认值解析得到的状态目录路径。
+    // 如果当前状态目录路径与默认状态目录路径相同，则返回默认的配置文件路径。
     return resolveConfigPathCandidate(env, homedir);
   }
+  // 返回stateDir下的 openclaw.json 配置文件
   return path.join(stateDir, CONFIG_FILENAME);
 }
 

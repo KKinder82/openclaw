@@ -14,6 +14,8 @@ const DEV_IDENTITY_THEME = "protocol droid";
 const DEV_IDENTITY_EMOJI = "🤖";
 const DEV_AGENT_WORKSPACE_SUFFIX = "dev";
 
+// 加载开发环境的模板文件，如果模板文件存在且格式正确，则返回模板内容；
+// 否则返回提供的 fallback 内容。
 async function loadDevTemplate(name: string, fallback: string): Promise<string> {
   try {
     const templateDir = await resolveWorkspaceTemplateDir();
@@ -31,6 +33,7 @@ async function loadDevTemplate(name: string, fallback: string): Promise<string> 
   }
 }
 
+// 从环境中解析<开发工作空间>目录，
 const resolveDevWorkspaceDir = (env: NodeJS.ProcessEnv = process.env): string => {
   const baseDir = resolveDefaultAgentWorkspaceDir(env, os.homedir);
   const profile = normalizeOptionalLowercaseString(env.OPENCLAW_PROFILE);
@@ -88,9 +91,12 @@ async function ensureDevWorkspace(dir: string) {
   await writeFileIfMissing(path.join(resolvedDir, "USER.md"), user);
 }
 
+// 确保开发环境的配置文件存在，
+// 如果不存在或者需要重置，则创建或覆盖配置文件，并确保开发工作空间准备就绪。
 export async function ensureDevGatewayConfig(opts: { reset?: boolean }) {
   const workspace = resolveDevWorkspaceDir();
   if (opts.reset) {
+    // 处理重置逻辑，调用 handleReset 函数来重置开发工作空间，
     await handleReset("full", workspace, defaultRuntime);
   }
 
@@ -98,6 +104,7 @@ export async function ensureDevGatewayConfig(opts: { reset?: boolean }) {
   const configPath = io.configPath;
   const configExists = fs.existsSync(configPath);
   if (!opts.reset && configExists) {
+    // 配置文件已经存在且不需要重置，直接返回。
     return;
   }
 
@@ -128,6 +135,7 @@ export async function ensureDevGatewayConfig(opts: { reset?: boolean }) {
     },
     afterWrite: { mode: "auto" },
   });
+  // 确保开发工作空间准备就绪。
   await ensureDevWorkspace(workspace);
   defaultRuntime.log(`Dev config ready: ${shortenHomePath(configPath)}`);
   defaultRuntime.log(`Dev workspace ready: ${shortenHomePath(resolveUserPath(workspace))}`);

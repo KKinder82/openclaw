@@ -17,6 +17,7 @@ export function hasProxyEnvConfigured(env: NodeJS.ProcessEnv = process.env): boo
   return false;
 }
 
+// 标准化环境变量值，去除前后空白，空字符串视为 null，非字符串视为 undefined。
 function normalizeProxyEnvValue(value: string | undefined): string | null | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -73,6 +74,10 @@ function resolveEnvAllProxyUrl(env: NodeJS.ProcessEnv): string | undefined {
  * HTTP/HTTPS proxy overrides. Keep this helper separate from the
  * HTTP(S)-only URL helpers so SSRF trusted-env proxy gates do not widen.
  */
+// 解析环境变量中 HTTP/HTTPS 代理设置，
+// 构建 undici EnvHttpProxyAgent 的选项对象。
+// EnvHttpProxyAgent 不会直接读取 ALL_PROXY 环境变量，但它接受显式的 HTTP/HTTPS 代理覆盖设置。
+// 将此帮助程序与仅限 HTTP(S) 的 URL 帮助程序分开，以便 SSRF 受信任环境代理门控不会扩大范围。
 export function resolveEnvHttpProxyAgentOptions(
   env: NodeJS.ProcessEnv = process.env,
 ): EnvHttpProxyAgentProxyOptions | undefined {
@@ -86,6 +91,7 @@ export function resolveEnvHttpProxyAgentOptions(
   return options.httpProxy || options.httpsProxy ? options : undefined;
 }
 
+// 环境变量中，是否配置了 HttpProxyAgent 相关的代理设置，
 export function hasEnvHttpProxyAgentConfigured(env: NodeJS.ProcessEnv = process.env): boolean {
   return resolveEnvHttpProxyAgentOptions(env) !== undefined;
 }

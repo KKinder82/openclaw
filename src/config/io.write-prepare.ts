@@ -7,6 +7,7 @@ import type { OpenClawConfig } from "./types.js";
 const OPEN_DM_POLICY_ALLOW_FROM_RE =
   /^(?<policyPath>[a-z0-9_.-]+)\s*=\s*"open"\s+requires\s+(?<allowPath>[a-z0-9_.-]+)(?:\s+\(or\s+[a-z0-9_.-]+\))?\s+to include "\*"$/i;
 
+// 管理配置中需要强制 unset 的路径列表，
 const MANAGED_CONFIG_UNSET_PATHS = [["plugins", "installs"]] as const;
 
 function cloneUnknown<T>(value: T): T {
@@ -330,6 +331,7 @@ export function formatConfigValidationFailure(pathLabel: string, issueMessage: s
   ].join("\n");
 }
 
+// 参数 raw 是数字返回 true, 否则返回 false。
 function isNumericPathSegment(raw: string): boolean {
   return /^[0-9]+$/.test(raw);
 }
@@ -342,7 +344,7 @@ function hasOwnObjectKey(value: Record<string, unknown>, key: string): boolean {
   return Object.prototype.hasOwnProperty.call(value, key);
 }
 
-const WRITE_PRUNED_OBJECT = Symbol("write-pruned-object");
+const WRITE_PRUNED_OBJECT = Symbol("write-pruned-object"); // 被修剪的
 
 function coerceConfig(value: unknown): OpenClawConfig {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
@@ -357,30 +359,38 @@ function unsetPathForWriteAt(
   depth: number,
 ): { changed: boolean; value: unknown } {
   if (depth >= pathSegments.length) {
+    // 如果 pathSegments 的深度已经超过了路径长度，说明已经到达目标位置，
+    // 但由于 unset 操作需要删除该位置的值，因此返回一个特殊标记 WRITE_PRUNED_OBJECT 来指示调用者进行删除，而不是保留原值。
     return { changed: false, value };
   }
-  const segment = pathSegments[depth];
-  const isLeaf = depth === pathSegments.length - 1;
+  const segment = pathSegments[depth]; // 当前路径段
+  const isLeaf = depth === pathSegments.length - 1; // 最后一个路径段表示要 unset 的目标位置
 
   if (Array.isArray(value)) {
+    // Value 是一个数组时，路径段必须是一个有效的数字索引，且在数组范围内，
     if (!isNumericPathSegment(segment)) {
+      // 如果路径段不是一个数字索引，则无法 unset 数组中的元素，直接返回未修改的值。
       return { changed: false, value };
     }
     const index = Number.parseInt(segment, 10);
     if (!Number.isFinite(index) || index < 0 || index >= value.length) {
+      // 如果路径段表示的索引无效或超出数组范围，则无法 unset 数组中的元素，直接返回未修改的值。
       return { changed: false, value };
     }
     if (isLeaf) {
-      const next = value.slice();
-      next.splice(index, 1);
+      // 如果已经到达目标位置，直接从数组中删除该索引对应的元素，并返回修改后的数组。
+      const next = value.slice(); // 创建一个新的数组副本，以保持不可变性。
+      next.splice(index, 1); // 从数组中删除指定索引的元素。
       return { changed: true, value: next };
     }
+    // 如果还没有到达目标位置，继续递归地 unset 子路径，并根据子路径的修改结果来决定是否需要更新当前数组。
     const child = unsetPathForWriteAt(value[index], pathSegments, depth + 1);
     if (!child.changed) {
       return { changed: false, value };
     }
     const next = value.slice();
     if (child.value === WRITE_PRUNED_OBJECT) {
+      // 如果子路径被标记为 WRITE_PRUNED_OBJECT，说明子路径的值已经被删除了，因此需要从数组中删除该索引对应的元素。
       next.splice(index, 1);
     } else {
       next[index] = child.value;
@@ -425,10 +435,12 @@ export function unsetPathForWrite(
   pathSegments: string[],
 ): { changed: boolean; next: OpenClawConfig } {
   if (pathSegments.length === 0) {
+    // 如果路径为空，则表示不需要 unset 任何内容，直接返回原始配置。
     return { changed: false, next: root };
   }
   const result = unsetPathForWriteAt(root, pathSegments, 0);
   if (!result.changed) {
+    // 如果没有任何修改，直接返回原始配置。
     return { changed: false, next: root };
   }
   if (result.value === WRITE_PRUNED_OBJECT) {
@@ -447,6 +459,7 @@ export function applyUnsetPathsForWrite(
   let next = root;
   for (const unsetPath of unsetPaths ?? []) {
     if (!Array.isArray(unsetPath) || unsetPath.length === 0) {
+      // 如果 unsetPath 不是一个非空数组，则跳过该路径，不进行任何 unset 操作。
       continue;
     }
     const unsetResult = unsetPathForWrite(next, unsetPath);
@@ -454,23 +467,30 @@ export function applyUnsetPathsForWrite(
       next = unsetResult.next;
     }
   }
+  // 返回经过所有 unset 路径处理后的配置，如果没有任何修改，则返回原始配置。
   return next;
 }
 
+// 生成 unsetPaths的最终列表，
+// 包括 MANAGED_CONFIG_UNSET_PATHS 中的路径以及调用者提供的 unsetPaths 中的路径，
+// 但会去重和过滤掉无效的路径。
 export function resolveManagedUnsetPathsForWrite(
   unsetPaths: readonly string[][] | undefined,
 ): string[][] {
   const next: string[][] = [];
   for (const managedPath of MANAGED_CONFIG_UNSET_PATHS) {
-    next.push(Array.from(managedPath));
+    next.push(Array.from(managedPath)); // Array.from(managedPath) 把 managedPath 转换成一个新的数组实例
   }
   for (const unsetPath of unsetPaths ?? []) {
     if (!Array.isArray(unsetPath) || unsetPath.length === 0) {
+      // 如果 unsetPath 不是一个非空数组，则跳过该路径，不将其包含在最终的 unset 路径列表中。
       continue;
     }
     if (next.some((existing) => isDeepStrictEqual(existing, unsetPath))) {
+      // isDeepStrictEqual 比较2个对象是否深度相等，
       continue;
     }
+    // 加入
     next.push([...unsetPath]);
   }
   return next;

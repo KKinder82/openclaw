@@ -110,6 +110,7 @@ function shouldBlockWorkspaceRuntimeDotEnvKey(key: string): boolean {
   return isDangerousHostEnvVarName(key) || isDangerousHostEnvOverrideVarName(key);
 }
 
+// 不被允许使用的 key名称。
 function shouldBlockRuntimeDotEnvKey(key: string): boolean {
   // The global ~/.openclaw/.env (or OPENCLAW_STATE_DIR/.env) is a trusted
   // operator-controlled runtime surface. Workspace .env is untrusted and gets
@@ -139,9 +140,10 @@ type LoadedDotEnvFile = {
   entries: DotEnvEntry[];
 };
 
+//读取环境变量文件，返回解析后的键值对列表，同时过滤掉被认为是危险的变量。
 function readDotEnvFile(params: {
   filePath: string;
-  shouldBlockKey: (key: string) => boolean;
+  shouldBlockKey: (key: string) => boolean; // 用于判断是否应该阻止某个环境变量键的函数，通常会检查键名是否在危险列表中。
   quiet?: boolean;
 }): LoadedDotEnvFile | null {
   let content: string;
@@ -152,6 +154,7 @@ function readDotEnvFile(params: {
       const code =
         error && typeof error === "object" && "code" in error ? String(error.code) : undefined;
       if (code !== "ENOENT") {
+        // ENOENT 是 Node.js 环境中的一个标准系统错误代码，代表 Error NO ENTry（错误：没有这个目录或文件）。
         logger.warn(`Failed to read ${params.filePath}: ${String(error)}`, { error });
       }
     }
@@ -160,6 +163,8 @@ function readDotEnvFile(params: {
 
   let parsed: Record<string, string>;
   try {
+    // 分析 .env 文件的内容，
+    // 提取出环境变量的键值对。
     parsed = dotenv.parse(content);
   } catch (error) {
     if (!params.quiet) {
@@ -171,6 +176,7 @@ function readDotEnvFile(params: {
   for (const [rawKey, value] of Object.entries(parsed)) {
     const key = normalizeEnvVarKey(rawKey, { portable: true });
     if (!key || params.shouldBlockKey(key)) {
+      // 如果键名无效或被认为是危险的，则跳过该键值对，不将其包含在返回的列表中。
       continue;
     }
     entries.push({ key, value });
@@ -178,6 +184,8 @@ function readDotEnvFile(params: {
   return { filePath: params.filePath, entries };
 }
 
+// 读取工作区 .env 文件，
+// 覆盖 process.env 中未定义的变量，但不允许覆盖任何被认为是危险的变量（如路径、代理设置、OpenClaw 认证/控制变量等）。
 export function loadWorkspaceDotEnvFile(filePath: string, opts?: { quiet?: boolean }) {
   const parsed = readDotEnvFile({
     filePath,
@@ -195,6 +203,7 @@ export function loadWorkspaceDotEnvFile(filePath: string, opts?: { quiet?: boole
   }
 }
 
+// 读取已经解析的 .env 文件列表，
 function loadParsedDotEnvFiles(files: LoadedDotEnvFile[]) {
   const preExistingKeys = new Set(Object.keys(process.env));
   const conflicts = new Map<string, { keptPath: string; ignoredPath: string; keys: Set<string> }>();
@@ -243,12 +252,16 @@ function loadParsedDotEnvFiles(files: LoadedDotEnvFile[]) {
 
 export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvPath?: string }) {
   const quiet = opts?.quiet ?? true;
+  // stateEnvPath .env 文件路径。
   const stateEnvPath = opts?.stateEnvPath ?? path.join(resolveConfigDir(process.env), ".env");
+  // ~/.openclaw/.env 是全局默认位置，但如果 OPENCLAW_STATE_DIR 被显式设置为非默认位置，则不加载 ~/.openclaw/.env，避免与用户期望的 state dir 配置冲突。
   const defaultStateEnvPath = path.join(
     resolveRequiredHomeDir(process.env, os.homedir),
     ".openclaw",
     ".env",
   );
+  // 只有当 OPENCLAW_STATE_DIR 没有被显式设置为非默认位置时，
+  // 才加载全局默认位置 ~/.openclaw/.env。
   const hasExplicitNonDefaultStateDir =
     process.env.OPENCLAW_STATE_DIR?.trim() !== undefined &&
     path.resolve(stateEnvPath) !== path.resolve(defaultStateEnvPath);
@@ -260,6 +273,7 @@ export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvP
     }),
   ];
   if (!hasExplicitNonDefaultStateDir) {
+    // 加载全局默认位置 ~/.openclaw/.env，作为 stateEnvPath 的后备选项，
     parsedFiles.push(
       readDotEnvFile({
         filePath: path.join(
@@ -277,8 +291,10 @@ export function loadGlobalRuntimeDotEnvFiles(opts?: { quiet?: boolean; stateEnvP
   loadParsedDotEnvFiles(parsed);
 }
 
+// 从 .env 文件中 加载 环境变量
 export function loadDotEnv(opts?: { quiet?: boolean }) {
   const quiet = opts?.quiet ?? true;
+  // 首先加载工作区 .env 文件，
   const cwdEnvPath = path.join(process.cwd(), ".env");
   loadWorkspaceDotEnvFile(cwdEnvPath, { quiet });
 

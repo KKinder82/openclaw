@@ -116,29 +116,37 @@ export function truncateUtf16Safe(input: string, maxLen: number): string {
   return sliceUtf16Safe(input, 0, limit);
 }
 
+// 获取用户路径（如 ~ 或 $OPENCLAW_HOME）并解析为绝对路径。
 export function resolveUserPath(
   input: string,
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
   if (!input) {
+    // 如果输入为空或未定义，直接返回空字符串，避免后续路径解析出错。
     return "";
   }
   return resolveHomeRelativePath(input, { env, homedir });
 }
 
+// 返回配置目录(profile) ~/.openclaw
+// 优先级：OPENCLAW_STATE_DIR > OPENCLAW_CONFIG_PATH > ~/.openclaw
 export function resolveConfigDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
 ): string {
   const override = env.OPENCLAW_STATE_DIR?.trim();
   if (override) {
+    // 如果 OPENCLAW_STATE_DIR 被设置了，
+    // 直接使用它作为配置目录（解析用户路径），不再考虑其他环境变量或默认位置。
     return resolveUserPath(override, env, homedir);
   }
   const configPath = env.OPENCLAW_CONFIG_PATH?.trim();
   if (configPath) {
+    // 去除文件名
     return path.dirname(resolveUserPath(configPath, env, homedir));
   }
+  // ~/.openclaw
   const newDir = path.join(resolveRequiredHomeDir(env, homedir), ".openclaw");
   try {
     const hasNew = fs.existsSync(newDir);
@@ -146,20 +154,27 @@ export function resolveConfigDir(
       return newDir;
     }
   } catch {
+    // 尽力而为
     // best-effort
   }
   return newDir;
 }
 
+// 获取用户路径（
+// ~
 export function resolveHomeDir(): string | undefined {
   return resolveEffectiveHomeDir(process.env, os.homedir);
 }
 
+// 返回用户路径（如 ~ 或 $OPENCLAW_HOME）及其显示前缀（~ 或 $OPENCLAW_HOME）。
 function resolveHomeDisplayPrefix(): { home: string; prefix: string } | undefined {
   const home = resolveHomeDir();
   if (!home) {
     return undefined;
   }
+  // 如果用户设置了 OPENCLAW_HOME，
+  //   优先使用 $OPENCLAW_HOME 作为显示前缀，
+  //   否则使用 ~。
   const explicitHome = process.env.OPENCLAW_HOME?.trim();
   if (explicitHome) {
     return { home, prefix: "$OPENCLAW_HOME" };

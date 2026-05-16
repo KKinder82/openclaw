@@ -26,6 +26,7 @@ export type ConfigWriteFollowUp =
       requiresRestart: true;
     };
 
+// 解析配置写入后的后续操作，默认为 auto 模式，表示根据实际情况自动决定是否需要重启。
 export function resolveConfigWriteAfterWrite(
   afterWrite?: ConfigWriteAfterWrite,
 ): ConfigWriteAfterWrite {

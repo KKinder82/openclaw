@@ -77,6 +77,7 @@ export function isTruthyEnvValue(value?: string): boolean {
   }
 }
 
+// 环境变量中，是否含有 Vitest
 export function isVitestRuntimeEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   return (
     env.VITEST === "true" ||
@@ -87,6 +88,7 @@ export function isVitestRuntimeEnv(env: NodeJS.ProcessEnv = process.env): boolea
   );
 }
 
+// 标准化 环境变量，目前包括标准化 ZAI 相关的环境变量（如果存在的话），
 export function normalizeEnv(): void {
   normalizeZaiEnv();
 }

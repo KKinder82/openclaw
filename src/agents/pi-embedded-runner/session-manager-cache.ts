@@ -84,6 +84,8 @@ export function createSessionManagerCache(options?: {
 
 const sessionManagerCache = createSessionManagerCache();
 
+// 导出一个函数来访问 session manager cache，
+// 允许其他模块跟踪 session manager 的访问和预热 session 文件。
 export function trackSessionManagerAccess(sessionFile: string): void {
   sessionManagerCache.trackSessionManagerAccess(sessionFile);
 }

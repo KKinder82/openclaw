@@ -37,6 +37,8 @@ export function parseSemver(version: string | null): Semver | null {
   };
 }
 
+// 是否满足最低版本要求，
+// 比较两个 Semver 对象，判断 version 是否大于或等于 minimum。
 export function isAtLeast(version: Semver | null, minimum: Semver): boolean {
   if (!version) {
     return false;
@@ -96,6 +98,8 @@ export function nodeVersionSatisfiesEngine(
   return isAtLeast(parseSemver(version), minimum);
 }
 
+// 断言 当前运行时环境满足要求，
+// 如果不满足，则输出错误信息并退出。
 export function assertSupportedRuntime(
   runtime: RuntimeEnv = defaultRuntime,
   details: RuntimeDetails = detectRuntime(),

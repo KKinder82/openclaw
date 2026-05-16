@@ -224,6 +224,7 @@ async function defaultExtractBatch(params: {
   const resolved = resolveCommitmentsConfig(cfg);
   const runId = `commitments-${randomUUID()}`;
   const modelRef = await resolveDefaultModel({ cfg, agentId: first.agentId });
+  // 运行 PI agent 来提取承诺，传入构建好的提示语和相关参数，等待结果返回后解析成承诺提取结果。
   const result = await runEmbeddedPiAgent({
     sessionId: runId,
     sessionKey: `agent:${first.agentId}:commitments:${runId}`,

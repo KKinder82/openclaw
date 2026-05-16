@@ -71,8 +71,8 @@ const GATEWAY_RUN_VALUE_KEYS = [
   "auth",
   "password",
   "passwordFile",
-  "tailscale",
-  "wsLog",
+  "tailscale", // 是否启用 Tailscale 网络
+  "wsLog", // WebSocket 日志配置/路径
   "rawStreamPath",
 ] as const;
 
@@ -113,6 +113,8 @@ const GATEWAY_AUTH_MODES: readonly GatewayAuthMode[] = [
 ];
 const GATEWAY_TAILSCALE_MODES: readonly GatewayTailscaleMode[] = ["off", "serve", "funnel"];
 
+// 把选项值转为 string 类型，
+// 如果值是 string、number 或 bigint 则返回对应的字符串，否则返回 undefined。
 const toOptionString = (value: unknown): string | undefined => {
   if (typeof value === "string") {
     return value;
@@ -141,6 +143,8 @@ function extractGatewayMiskeys(parsed: unknown): {
   return { hasGatewayToken, hasRemoteToken };
 }
 
+// 创建一个 Gateway CLI 启动跟踪器，
+// 用于在启动过程中标记不同阶段的持续时间和总时间。
 function createGatewayCliStartupTrace() {
   const enabled = isTruthyEnvValue(process.env.OPENCLAW_GATEWAY_STARTUP_TRACE);
   const started = performance.now();
@@ -348,6 +352,7 @@ async function readGatewayStartupConfig(params: {
   };
 }
 
+// 解析和验证 Gateway Run 命令的选项，返回一个包含解析结果的对象。
 function resolveGatewayRunOptions(opts: GatewayRunOpts, command?: Command): GatewayRunOpts {
   const resolved: GatewayRunOpts = { ...opts };
 
@@ -355,6 +360,7 @@ function resolveGatewayRunOptions(opts: GatewayRunOpts, command?: Command): Gate
     const inherited = inheritOptionFromParent(command, key);
     if (key === "wsLog") {
       // wsLog has a child default ("auto"), so prefer inherited parent CLI value when present.
+      // 父命令的 CLI 值优先于子命令的默认值 "auto"，以便在父命令中设置 --ws-log 后，子命令默认使用父命令的值，而不是 "auto"。
       resolved[key] = inherited ?? resolved[key];
       continue;
     }
@@ -513,10 +519,12 @@ async function maybeWriteGatewayStartupFailureBundle(err: unknown): Promise<void
 }
 
 async function runGatewayCommand(opts: GatewayRunOpts) {
+  // 安装 QA 环境下的父进程看门狗，确保当父进程退出时，Gateway CLI 不会继续孤立运行。
   installQaParentWatchdog();
   const isDevProfile = normalizeOptionalLowercaseString(process.env.OPENCLAW_PROFILE) === "dev";
   const devMode = Boolean(opts.dev) || isDevProfile;
   if (opts.reset && !devMode) {
+    // reset 与 非dev 模式不兼容，--reset 必须与 --dev 一起使用，否则会导致配置重置后立即退出，无法正常启动。
     defaultRuntime.error("Use --reset with --dev.");
     defaultRuntime.exit(1);
     return;
@@ -542,6 +550,7 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
   setGatewayWsLogStyle(wsLogStyle);
 
   if (opts.rawStream) {
+    // 启用原始日志流模式，直接将日志输出到指定路径或标准输出，适用于需要机器解析日志的场景。
     process.env.OPENCLAW_RAW_STREAM = "1";
   }
   const rawStreamPath = toOptionString(opts.rawStreamPath);
@@ -561,6 +570,8 @@ async function runGatewayCommand(opts: GatewayRunOpts) {
     ),
   );
 
+  // 设置控制台日志的时间戳前缀，以便在日志中显示时间信息，
+  // 帮助用户了解日志的时间顺序和事件发生的时间。
   setConsoleTimestampPrefix(true);
 
   if (devMode) {

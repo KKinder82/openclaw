@@ -17,6 +17,8 @@ function pathModuleForPlatform(platform: NodeJS.Platform): typeof path.posix {
   return platform === "win32" ? path.win32 : path.posix;
 }
 
+// 解析 CLI 重启命令，在 Volta 环境下将重启命令替换为 "node"，
+// 以避免 Volta 的 shim 导致的重复重启问题。
 export function resolveCliRespawnCommand(params: {
   execPath: string;
   platform?: NodeJS.Platform;
@@ -44,6 +46,8 @@ function hasExperimentalWarningSuppressed(
   return execArgv.some((arg) => arg === EXPERIMENTAL_WARNING_FLAG || arg === "--no-warnings");
 }
 
+// 构建 CLI 重启计划，
+// 返回值 command 是重启命令 Node，argv 是重启参数，env 是重启环境变量。
 export function buildCliRespawnPlan(
   params: {
     argv?: string[];

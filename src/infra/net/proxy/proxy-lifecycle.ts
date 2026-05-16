@@ -80,6 +80,7 @@ export function _resetGlobalAgentBootstrapForTests(): void {
   baseProxyEnvSnapshot = null;
 }
 
+// 捕获当前的代理相关环境变量值，
 function captureProxyEnv(): ProxyEnvSnapshot {
   return {
     http_proxy: process.env["http_proxy"],
@@ -102,6 +103,7 @@ function injectProxyEnv(proxyUrl: string): ProxyEnvSnapshot {
   return snapshot;
 }
 
+// 把代理  proxyUrl  注入到环境变量中，
 function applyProxyEnv(proxyUrl: string): void {
   for (const key of PROXY_ENV_KEYS) {
     process.env[key] = proxyUrl;
@@ -226,10 +228,12 @@ function bootstrapNodeHttpStack(proxyUrl: string): void {
   }
 }
 
+// 查找当前活跃的 代理，
 function findTopActiveProxyRegistration(): ActiveProxyRegistration | null {
   for (let index = activeProxyRegistrations.length - 1; index >= 0; index -= 1) {
     const registration = activeProxyRegistrations[index];
     if (!registration.stopped) {
+      // 返回最后一个未停止的代理注册，表示当前活跃的代理。
       return registration;
     }
   }
@@ -307,6 +311,7 @@ function stopActiveProxyRegistration(registration: ActiveProxyRegistration): voi
   restoreInactiveProxyRuntime(restoreSnapshot);
 }
 
+// 判断 一个 string 是否是一个有效的 HTTP 代理 URL，
 function isSupportedProxyUrl(value: string): boolean {
   try {
     const url = new URL(value);
@@ -319,6 +324,7 @@ function isSupportedProxyUrl(value: string): boolean {
 function resolveProxyUrl(config: ProxyConfig | undefined): string {
   const candidate = config?.proxyUrl?.trim() || process.env["OPENCLAW_PROXY_URL"]?.trim();
   if (!candidate) {
+    // 如果没有配置代理 URL，则抛出错误，提示用户设置 proxy.proxyUrl 或 OPENCLAW_PROXY_URL。
     throw new Error(
       "proxy: enabled but no HTTP proxy URL is configured; set proxy.proxyUrl " +
         "or OPENCLAW_PROXY_URL to an http:// forward proxy.",
@@ -342,8 +348,12 @@ function redactProxyUrlForLog(value: string): string {
   }
 }
 
+// 启动代理
+// 依据是当前命令路径的策略配置和环境变量设置。
+// 让当前的 HTTP 请求都通过这个代理 URL 进行转发，
 export async function startProxy(config: ProxyConfig | undefined): Promise<ProxyHandle | null> {
   if (config?.enabled !== true) {
+    // 如果没有启用代理，则直接返回 null，表示不启动代理。
     return null;
   }
 

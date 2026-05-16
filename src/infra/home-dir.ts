@@ -2,6 +2,8 @@ import os from "node:os";
 import path from "node:path";
 import { normalizeOptionalString } from "../shared/string-coerce.js";
 
+// 标准化字符串
+// 返回字符串本身或者 undefined
 function normalize(value: string | undefined): string | undefined {
   const trimmed = normalizeOptionalString(value);
   if (!trimmed) {
@@ -13,6 +15,7 @@ function normalize(value: string | undefined): string | undefined {
   return trimmed;
 }
 
+// 返回有效的 home 目录路径，
 export function resolveEffectiveHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -21,6 +24,9 @@ export function resolveEffectiveHomeDir(
   return raw ? path.resolve(raw) : undefined;
 }
 
+// 将 ~ 展开为 实际的 home 目录，
+// 如果输入值以 ~ 开头，则将 ~ 替换为解析到的 home 目录路径（如果解析成功），
+// 否则返回输入值的绝对路径。
 export function resolveOsHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -29,6 +35,7 @@ export function resolveOsHomeDir(
   return raw ? path.resolve(raw) : undefined;
 }
 
+// 解析原始的 home 目录路径，
 function resolveRawHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): string | undefined {
   const explicitHome = normalize(env.OPENCLAW_HOME);
   if (explicitHome) {
@@ -45,6 +52,8 @@ function resolveRawHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): strin
   return resolveRawOsHomeDir(env, homedir);
 }
 
+// 返回原始的(操作系统级 Home 目录)有效的 home 目录路径，
+// 优先级：env.HOME > env.USERPROFILE > os.homedir()
 function resolveRawOsHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): string | undefined {
   const envHome = normalize(env.HOME);
   if (envHome) {
@@ -65,6 +74,9 @@ function normalizeSafe(homedir: () => string): string | undefined {
   }
 }
 
+// 获取用户路径（一定有值）
+// 优化级：
+//  ~ -> cwd
 export function resolveRequiredHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -72,6 +84,9 @@ export function resolveRequiredHomeDir(
   return resolveEffectiveHomeDir(env, homedir) ?? path.resolve(process.cwd());
 }
 
+// 获取用户路径
+// 优化级：
+//  env.HOME -> env.PROFILE -> cwd
 export function resolveRequiredOsHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -79,6 +94,8 @@ export function resolveRequiredOsHomeDir(
   return resolveOsHomeDir(env, homedir) ?? path.resolve(process.cwd());
 }
 
+// 将 ~ 展开为 实际的 home 目录，
+// 如果输入值以 ~ 开头，则将 ~ 替换为解析到的 home 目录路径（如果解析成功），否则返回输入值的绝对路径。
 export function expandHomePrefix(
   input: string,
   opts?: {
@@ -88,17 +105,24 @@ export function expandHomePrefix(
   },
 ): string {
   if (!input.startsWith("~")) {
+    // 不以 ~ 开头，直接返回输入值的绝对路径。
     return input;
   }
   const home =
     normalize(opts?.home) ??
     resolveEffectiveHomeDir(opts?.env ?? process.env, opts?.homedir ?? os.homedir);
   if (!home) {
+    // 没有 home 目录可用，返回输入值的绝对路径。
     return input;
   }
+  // 将 ~ 替换为解析到的 home 目录路径，并返回结果的绝对路径。
   return input.replace(/^~(?=$|[\\/])/, home);
 }
 
+// 解析 home 目录路径，
+// 如果 input 为空字符串或者仅包含空白字符，则返回空字符串；
+// 如果 input 以 ~ 开头，则将 ~ 替换为解析到的 home 目录路径（如果解析成功），
+// 否则返回 input 的绝对路径。
 export function resolveHomeRelativePath(
   input: string,
   opts?: {
@@ -118,6 +142,7 @@ export function resolveHomeRelativePath(
     });
     return path.resolve(expanded);
   }
+  // 不以 ~ 开头，直接返回输入值的绝对路径。
   return path.resolve(trimmed);
 }
 

@@ -18,9 +18,9 @@ export function attachChildProcessBridge(
   const listeners = new Map<NodeJS.Signals, () => void>();
   for (const signal of signals) {
     const listener = (): void => {
-      onSignal?.(signal);
+      onSignal?.(signal); // callback for testing/logging
       try {
-        child.kill(signal);
+        child.kill(signal); // Forward signal to child.
       } catch {
         // ignore
       }

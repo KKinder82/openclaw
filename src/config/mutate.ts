@@ -56,6 +56,8 @@ type ConfigMutationIO = {
   writeConfigFile: (cfg: OpenClawConfig, options?: ConfigWriteOptions) => Promise<unknown>;
 };
 
+// 断言当前配置快照的哈希值与预期值匹配，
+// 如果不匹配则抛出 ConfigMutationConflictError 错误，
 function assertBaseHashMatches(snapshot: ConfigFileSnapshot, expectedHash?: string): string | null {
   const currentHash = resolveConfigSnapshotHash(snapshot) ?? null;
   if (expectedHash !== undefined && expectedHash !== currentHash) {
@@ -68,6 +70,8 @@ function assertBaseHashMatches(snapshot: ConfigFileSnapshot, expectedHash?: stri
 
 function getChangedTopLevelKeys(base: unknown, next: unknown): string[] {
   if (!isRecord(base) || !isRecord(next)) {
+    // 如果 base 或 next 不是对象，则无法比较具体的键，
+    // 直接根据整体是否相等来判断是否有变化。
     return isDeepStrictEqual(base, next) ? [] : ["<root>"];
   }
   const keys = new Set([...Object.keys(base), ...Object.keys(next)]);
@@ -129,6 +133,9 @@ async function writeJsonFileAtomic(filePath: string, value: unknown): Promise<vo
   }
 }
 
+// 尝试通过单个顶级 include 进行配置变更，
+// 如果满足条件则直接写入 include 文件并刷新运行时快照，
+// 否则返回 false 以指示调用者进行正常的全量写入流程。
 async function tryWriteSingleTopLevelIncludeMutation(params: {
   snapshot: ConfigFileSnapshot;
   nextConfig: OpenClawConfig;
@@ -140,6 +147,7 @@ async function tryWriteSingleTopLevelIncludeMutation(params: {
     params.nextConfig,
     resolveManagedUnsetPathsForWrite(params.writeOptions?.unsetPaths),
   );
+  // 获最顶层更改的 Key。
   const changedKeys = getChangedTopLevelKeys(params.snapshot.sourceConfig, nextConfig);
   if (changedKeys.length !== 1 || changedKeys[0] === "<root>") {
     return false;
@@ -221,6 +229,10 @@ async function tryWriteSingleTopLevelIncludeMutation(params: {
   return true;
 }
 
+// 替换配置文件的内容，
+// 如果提供了 snapshot 和 writeOptions 则直接使用它们，否则调用 readConfigFileSnapshotForWrite 来获取当前的配置快照和写入选项，
+// 然后尝试通过单个顶级 include 进行变更，如果不满足条件则进行正常的全量写入流程，
+// 最后返回包含变更结果的 ConfigReplaceResult 对象。
 export async function replaceConfigFile(params: {
   nextConfig: OpenClawConfig;
   baseHash?: string;
@@ -229,6 +241,8 @@ export async function replaceConfigFile(params: {
   writeOptions?: ConfigWriteOptions;
   io?: ConfigMutationIO;
 }): Promise<ConfigReplaceResult> {
+  // 如果调用者已经提供了 snapshot 和 writeOptions，
+  // 则直接使用它们，否则调用 readConfigFileSnapshotForWrite 来获取当前的配置快照和写入选项。
   const prepared =
     params.snapshot && params.writeOptions
       ? { snapshot: params.snapshot, writeOptions: params.writeOptions }
