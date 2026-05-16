@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { access } from "node:fs/promises";
 import module from "node:module";
@@ -103,6 +103,103 @@ const resolvePackagedCompileCacheDirectory = () => {
 // 如果是从源代码树或 GitHub 源代码归档启动，
 // 并且编译缓存未禁用但也未请求，
 // 则重新启动当前进程，禁用编译缓存。
+const respawnSignals =
+  process.platform === "win32"
+    ? ["SIGTERM", "SIGINT", "SIGBREAK"]
+    : ["SIGTERM", "SIGINT", "SIGHUP", "SIGQUIT"];
+const respawnSignalExitGraceMs = 1_000;
+const respawnSignalForceKillGraceMs = 1_000;
+
+const runRespawnedChild = (command, args, env) => {
+  const child = spawn(command, args, {
+    stdio: "inherit",
+    env,
+  });
+  const listeners = new Map();
+  // This intentionally overlaps with src/entry.compile-cache.ts; keep the
+  // respawn supervision behavior in sync until the launcher can share TS code.
+  // Give the child a moment to honor forwarded signals, then exit the wrapper so
+  // a child that ignores SIGTERM cannot keep the launcher alive indefinitely.
+  let signalExitTimer = null;
+  let signalForceKillTimer = null;
+  const detach = () => {
+    for (const [signal, listener] of listeners) {
+      process.off(signal, listener);
+    }
+    listeners.clear();
+    if (signalExitTimer) {
+      clearTimeout(signalExitTimer);
+      signalExitTimer = null;
+    }
+    if (signalForceKillTimer) {
+      clearTimeout(signalForceKillTimer);
+      signalForceKillTimer = null;
+    }
+  };
+  const forceKillChild = () => {
+    try {
+      child.kill(process.platform === "win32" ? "SIGTERM" : "SIGKILL");
+    } catch {
+      // Best-effort shutdown fallback.
+    }
+  };
+  const requestChildTermination = () => {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // Best-effort shutdown fallback.
+    }
+    signalForceKillTimer = setTimeout(() => {
+      forceKillChild();
+      process.exit(1);
+    }, respawnSignalForceKillGraceMs);
+    signalForceKillTimer.unref?.();
+  };
+  const scheduleParentExit = () => {
+    if (signalExitTimer) {
+      return;
+    }
+    signalExitTimer = setTimeout(() => {
+      requestChildTermination();
+    }, respawnSignalExitGraceMs);
+    signalExitTimer.unref?.();
+  };
+  for (const signal of respawnSignals) {
+    const listener = () => {
+      try {
+        child.kill(signal);
+      } catch {
+        // Best-effort signal forwarding.
+      }
+      scheduleParentExit();
+    };
+    try {
+      process.on(signal, listener);
+      listeners.set(signal, listener);
+    } catch {
+      // Unsupported signal on this platform.
+    }
+  }
+  child.once("exit", (code, signal) => {
+    detach();
+    if (signal) {
+      process.exit(1);
+    }
+    process.exit(code ?? 1);
+  });
+  child.once("error", (error) => {
+    detach();
+    process.stderr.write(
+      `[openclaw] Failed to respawn launcher: ${
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      }\n`,
+    );
+    process.exit(1);
+  });
+  return true;
+};
+
+// 禁用编译缓存的重新启动（如果需要）：
 const respawnWithoutCompileCacheIfNeeded = () => {
   // 如果不是从源代码树或 GitHub 源代码归档启动，不满足要求。
   if (!isSourceCheckoutLauncher()) {
@@ -122,21 +219,30 @@ const respawnWithoutCompileCacheIfNeeded = () => {
     OPENCLAW_SOURCE_COMPILE_CACHE_RESPAWNED: "1", // 设置一个环境变量，标记已经重新启动过，以避免重复重启。
   };
   delete env.NODE_COMPILE_CACHE;
+
   // 启动一个新的 Node.js 进程，运行相同的脚本（当前文件），传递相同的命令行参数，并使用修改后的环境变量。
   // `stdio: "inherit"` 选项确保子进程共享父进程的标准输入、输出和错误流，使得输出和交互行为保持一致。
-  const result = spawnSync(
+  // const result = spawnSync(
+  //   process.execPath,
+  //   [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
+  //   {
+  //     stdio: "inherit",
+  //   env,
+  //   },
+  // );
+  // if (result.error) {
+  //   throw result.error;
+  // }
+  // // 重新启动后直接退出当前进程，状态码与子进程相同（如果可用），确保正确传递成功或错误状态。
+  // process.exit(result.status ?? 1);
+
+  return runRespawnedChild(
     process.execPath,
-    [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
-    {
-      stdio: "inherit",
-      env,
-    },
+    [...process.execArgv, 
+      fileURLToPath(import.meta.url),
+      ...process.argv.slice(2)],  env,
   );
-  if (result.error) {
-    throw result.error;
-  }
-  // 重新启动后直接退出当前进程，状态码与子进程相同（如果可用），确保正确传递成功或错误状态。
-  process.exit(result.status ?? 1);
+
 };
 
 respawnWithoutCompileCacheIfNeeded();
@@ -167,21 +273,15 @@ const respawnWithPackagedCompileCacheIfNeeded = () => {
     NODE_COMPILE_CACHE: desiredDirectory, // 设置 `NODE_COMPILE_CACHE` 环境变量，指定预期的编译缓存目录。
     OPENCLAW_PACKAGED_COMPILE_CACHE_RESPAWNED: "1", // 设置一个环境变量，标记已经重新启动过，以避免重复重启。
   };
-  const result = spawnSync(
+  return runRespawnedChild(
     process.execPath,
     [...process.execArgv, fileURLToPath(import.meta.url), ...process.argv.slice(2)],
-    {
-      stdio: "inherit",
-      env,
-    },
+    env,
   );
-  if (result.error) {
-    throw result.error;
-  }
-  process.exit(result.status ?? 1);
 };
 
-respawnWithPackagedCompileCacheIfNeeded();
+const waitingForCompileCacheRespawn =
+  respawnWithoutCompileCacheIfNeeded() || respawnWithPackagedCompileCacheIfNeeded();
 
 // 正常启动。
 // 模块支持编译缓存功能，
@@ -189,7 +289,12 @@ respawnWithPackagedCompileCacheIfNeeded();
 // 且不是从源代码树或 GitHub 源代码归档启动，
 // 则启用编译缓存，使用预期的缓存目录。
 // https://nodejs.org/api/module.html#module-compile-cache
-if (module.enableCompileCache && !isNodeCompileCacheDisabled() && !isSourceCheckoutLauncher()) {
+if (
+  !waitingForCompileCacheRespawn &&
+  module.enableCompileCache &&
+  !isNodeCompileCacheDisabled() &&
+  !isSourceCheckoutLauncher()
+) {
   try {
     module.enableCompileCache(resolvePackagedCompileCacheDirectory());
   } catch {
@@ -345,6 +450,7 @@ const tryOutputBrowserHelp = () => {
   return true;
 };
 
+
 if (!isHelpFastPathDisabled() && (await tryOutputBareRootHelp())) {
   // 显示命令行帮助的快速路径：如果是直接请求根帮助文本的调用，则尝试加载预计算的帮助文本或直接导入输出函数，避免完整启动。
   // OK
@@ -354,10 +460,21 @@ if (!isHelpFastPathDisabled() && (await tryOutputBareRootHelp())) {
 } else {
   await installProcessWarningFilter();
   if (await tryImport("./dist/entry.js")) {
-    // OK
-  } else if (await tryImport("./dist/entry.mjs")) {
-    // OK
-  } else {
-    throw new Error(await buildMissingEntryErrorMessage());
+    if (!waitingForCompileCacheRespawn) {
+      if (!isHelpFastPathDisabled() && (await tryOutputBareRootHelp())) {
+        // OK
+      } else if (!isHelpFastPathDisabled() && tryOutputBrowserHelp()) {
+        // OK
+      } else {
+        await installProcessWarningFilter();
+        if (await tryImport("./dist/entry.js")) {
+          // OK
+        } else if (await tryImport("./dist/entry.mjs")) {
+          // OK
+        } else {
+          throw new Error(await buildMissingEntryErrorMessage());
+        }
+      }
+    }
   }
 }
