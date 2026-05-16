@@ -152,6 +152,13 @@ function expectInstalledBundledDirScenarioCase(
   expectInstalledBundledDirScenario(createScenario());
 }
 
+function requireBundledDir(value: string | null | undefined): string {
+  if (!value) {
+    throw new Error("expected bundled plugins dir");
+  }
+  return value;
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   if (originalBundledDir === undefined) {
@@ -199,7 +206,7 @@ describe("resolveBundledPluginsDir", () => {
       },
     ],
     [
-      "prefers source extensions in a pnpm git checkout outside vitest",
+      "prefers built dist/extensions in a pnpm git checkout outside vitest",
       {
         prefix: "openclaw-bundled-dir-git-built-",
         hasExtensions: true,
@@ -210,7 +217,7 @@ describe("resolveBundledPluginsDir", () => {
         hasPnpmWorkspace: true,
       },
       {
-        expectedRelativeDir: "extensions",
+        expectedRelativeDir: path.join("dist", "extensions"),
       },
     ],
     [
@@ -227,7 +234,7 @@ describe("resolveBundledPluginsDir", () => {
       },
     ],
     [
-      "still prefers source extensions during tsx-driven pnpm source execution",
+      "prefers built dist/extensions during tsx-driven pnpm source execution",
       {
         prefix: "openclaw-bundled-dir-tsx-built-",
         hasExtensions: true,
@@ -238,7 +245,7 @@ describe("resolveBundledPluginsDir", () => {
         hasPnpmWorkspace: true,
       },
       {
-        expectedRelativeDir: "extensions",
+        expectedRelativeDir: path.join("dist", "extensions"),
         execArgv: ["--import", "tsx"],
       },
     ],
@@ -328,7 +335,8 @@ describe("resolveBundledPluginsDir", () => {
 
     expect(resolveSourceCheckoutDependencyDiagnostic()).toEqual({
       source: repoRoot,
-      message: expect.stringContaining("run `pnpm install`"),
+      message:
+        "OpenClaw source checkout detected without pnpm workspace dependencies; run `pnpm install` from the repo root so bundled plugins can load package-local dependencies.",
     });
 
     process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS = "1";
@@ -351,11 +359,10 @@ describe("resolveBundledPluginsDir", () => {
     process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS = "1";
     delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeTruthy();
-    expect(fs.existsSync(bundledDir ?? "")).toBe(true);
-    expect(fs.readdirSync(bundledDir ?? "")).toEqual([]);
+    expect(fs.existsSync(bundledDir)).toBe(true);
+    expect(fs.readdirSync(bundledDir)).toStrictEqual([]);
   });
 
   it("separates tilde override cache entries by OPENCLAW_HOME", () => {
@@ -390,10 +397,9 @@ describe("resolveBundledPluginsDir", () => {
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = path.join(installedRoot, "dist", "extensions");
     delete process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeDefined();
-    expect(fs.realpathSync(bundledDir!)).not.toBe(
+    expect(fs.realpathSync(bundledDir)).not.toBe(
       fs.realpathSync(path.join(installedRoot, "dist", "extensions")),
     );
   });
@@ -410,10 +416,9 @@ describe("resolveBundledPluginsDir", () => {
     delete process.env.OPENCLAW_TEST_TRUST_BUNDLED_PLUGINS_DIR;
     delete process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeDefined();
-    expect(fs.realpathSync(bundledDir!)).not.toBe(
+    expect(fs.realpathSync(bundledDir)).not.toBe(
       fs.realpathSync(path.join(overrideRoot, "extensions")),
     );
   });
@@ -434,10 +439,9 @@ describe("resolveBundledPluginsDir", () => {
     delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
     delete process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeDefined();
-    expect(fs.realpathSync(bundledDir!)).not.toBe(
+    expect(fs.realpathSync(bundledDir)).not.toBe(
       fs.realpathSync(path.join(cwdRepoRoot, "extensions")),
     );
   });
@@ -454,10 +458,9 @@ describe("resolveBundledPluginsDir", () => {
     process.env.OPENCLAW_BUNDLED_PLUGINS_DIR = missingOverride;
     delete process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeDefined();
-    expect(path.resolve(bundledDir!)).not.toBe(path.resolve(missingOverride));
+    expect(path.resolve(bundledDir)).not.toBe(path.resolve(missingOverride));
   });
 
   it("falls back to argv root when an existing rejected override is unrelated", () => {
@@ -503,10 +506,9 @@ describe("resolveBundledPluginsDir", () => {
     delete process.env.OPENCLAW_BUNDLED_PLUGINS_DIR;
     delete process.env.OPENCLAW_DISABLE_BUNDLED_PLUGINS;
 
-    const bundledDir = resolveBundledPluginsDir();
+    const bundledDir = requireBundledDir(resolveBundledPluginsDir());
 
-    expect(bundledDir).toBeDefined();
-    expect(fs.realpathSync(bundledDir!)).not.toBe(
+    expect(fs.realpathSync(bundledDir)).not.toBe(
       fs.realpathSync(path.join(cwdRepoRoot, "extensions")),
     );
   });

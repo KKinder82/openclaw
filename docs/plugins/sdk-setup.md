@@ -327,7 +327,7 @@ For hot setup-only paths, prefer the narrow setup helper seams over the broader 
 | Import path                        | Use it for                                                                                | Key exports                                                                                                                                                                                                                                                                                  |
 | ---------------------------------- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `plugin-sdk/setup-runtime`         | setup-time runtime helpers that stay available in `setupEntry` / deferred channel startup | `createPatchedAccountSetupAdapter`, `createEnvPatchedAccountSetupAdapter`, `createSetupInputPresenceValidator`, `noteChannelLookupFailure`, `noteChannelLookupSummary`, `promptResolvedAllowFrom`, `splitSetupEntries`, `createAllowlistSetupWizardProxy`, `createDelegatedSetupWizardProxy` |
-| `plugin-sdk/setup-adapter-runtime` | environment-aware account setup adapters                                                  | `createEnvPatchedAccountSetupAdapter`                                                                                                                                                                                                                                                        |
+| `plugin-sdk/setup-adapter-runtime` | deprecated compatibility alias; use `plugin-sdk/setup-runtime`                            | `createEnvPatchedAccountSetupAdapter`                                                                                                                                                                                                                                                        |
 | `plugin-sdk/setup-tools`           | setup/install CLI/archive/docs helpers                                                    | `formatCliCommand`, `detectBinary`, `extractArchive`, `resolveBrewExecutable`, `formatDocsLink`, `CONFIG_DIR`                                                                                                                                                                                |
 
 Use the broader `plugin-sdk/setup` seam when you want the full shared setup toolbox, including config-patch helpers such as `moveSingleAccountChannelSectionToDefaultAccount(...)`.
@@ -492,15 +492,15 @@ The `ChannelSetupWizard` type supports `credentials`, `textInputs`, `dmPolicy`, 
 
 ## Publishing and installing
 
-**External plugins:** publish to [ClawHub](/tools/clawhub), then install:
+**External plugins:** publish to [ClawHub](/clawhub), then install:
 
 <Tabs>
-  <Tab title="Auto (ClawHub then npm)">
+  <Tab title="npm">
     ```bash
     openclaw plugins install @myorg/openclaw-my-plugin
     ```
 
-    OpenClaw tries ClawHub first and falls back to npm automatically.
+    Bare package specs install from npm during the launch cutover.
 
   </Tab>
   <Tab title="ClawHub only">

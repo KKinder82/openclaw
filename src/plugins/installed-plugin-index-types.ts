@@ -49,6 +49,11 @@ export type InstalledPluginInstallRecordInfo = Pick<
   | "clawhubPackage"
   | "clawhubFamily"
   | "clawhubChannel"
+  | "artifactKind"
+  | "artifactFormat"
+  | "npmIntegrity"
+  | "npmShasum"
+  | "npmTarballName"
   | "clawpackSha256"
   | "clawpackSpecVersion"
   | "clawpackManifestSha256"
@@ -96,6 +101,7 @@ export type InstalledPluginIndexRecord = {
   origin: PluginManifestRecord["origin"];
   enabled: boolean;
   enabledByDefault?: boolean;
+  enabledByDefaultOnPlatforms?: readonly string[];
   syntheticAuthRefs?: readonly string[];
   startup: InstalledPluginStartupInfo;
   compat: readonly PluginCompatCode[];

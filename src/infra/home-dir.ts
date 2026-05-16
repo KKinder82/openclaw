@@ -1,21 +1,44 @@
 import os from "node:os";
 import path from "node:path";
-import { normalizeOptionalString } from "../shared/string-coerce.js";
 
 // 标准化字符串
 // 返回字符串本身或者 undefined
 function normalize(value: string | undefined): string | undefined {
-  const trimmed = normalizeOptionalString(value);
-  if (!trimmed) {
-    return undefined;
-  }
-  if (trimmed === "undefined" || trimmed === "null") {
+  const trimmed = value?.trim();
+  if (!trimmed || trimmed === "undefined" || trimmed === "null") {
     return undefined;
   }
   return trimmed;
 }
 
+<<<<<<< HEAD
 // 返回有效的 home 目录路径，
+=======
+function normalizeSafe(homedir: () => string): string | undefined {
+  try {
+    return normalize(homedir());
+  } catch {
+    return undefined;
+  }
+}
+
+function resolveRawOsHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): string | undefined {
+  return normalize(env.HOME) ?? normalize(env.USERPROFILE) ?? normalizeSafe(homedir);
+}
+
+function resolveRawHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): string | undefined {
+  const explicitHome = normalize(env.OPENCLAW_HOME);
+  if (!explicitHome) {
+    return resolveRawOsHomeDir(env, homedir);
+  }
+  if (explicitHome === "~" || explicitHome.startsWith("~/") || explicitHome.startsWith("~\\")) {
+    const fallbackHome = resolveRawOsHomeDir(env, homedir);
+    return fallbackHome ? explicitHome.replace(/^~(?=$|[\\/])/, fallbackHome) : undefined;
+  }
+  return explicitHome;
+}
+
+>>>>>>> 74dae6088b1107ecfaca31c91660b309704c1a8a
 export function resolveEffectiveHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -35,6 +58,7 @@ export function resolveOsHomeDir(
   return raw ? path.resolve(raw) : undefined;
 }
 
+<<<<<<< HEAD
 // 解析原始的 home 目录路径，
 function resolveRawHomeDir(env: NodeJS.ProcessEnv, homedir: () => string): string | undefined {
   const explicitHome = normalize(env.OPENCLAW_HOME);
@@ -77,6 +101,8 @@ function normalizeSafe(homedir: () => string): string | undefined {
 // 获取用户路径（一定有值）
 // 优化级：
 //  ~ -> cwd
+=======
+>>>>>>> 74dae6088b1107ecfaca31c91660b309704c1a8a
 export function resolveRequiredHomeDir(
   env: NodeJS.ProcessEnv = process.env,
   homedir: () => string = os.homedir,
@@ -144,6 +170,14 @@ export function resolveHomeRelativePath(
   }
   // 不以 ~ 开头，直接返回输入值的绝对路径。
   return path.resolve(trimmed);
+}
+
+export function resolveUserPath(
+  input: string,
+  env: NodeJS.ProcessEnv = process.env,
+  homedir: () => string = os.homedir,
+): string {
+  return resolveHomeRelativePath(input, { env, homedir });
 }
 
 export function resolveOsHomeRelativePath(

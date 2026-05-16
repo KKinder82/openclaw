@@ -1,8 +1,12 @@
-import { spawnSync } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { enableCompileCache, getCompileCacheDir } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { attachChildProcessBridge } from "./process/child-process-bridge.js";
+
+const COMPILE_CACHE_RESPAWN_SIGNAL_EXIT_GRACE_MS = 1_000;
+const COMPILE_CACHE_RESPAWN_SIGNAL_FORCE_KILL_GRACE_MS = 1_000;
 
 // 返回entryFile所在目录
 // 安装 entryFile所在目录为 dist或src 时，则返回 dist或src的父目录
@@ -93,15 +97,23 @@ export function resolveOpenClawCompileCacheDirectory(params: {
   );
 }
 
-type OpenClawCompileCacheRespawnPlan = {
+export type OpenClawCompileCacheRespawnPlan = {
   command: string;
   args: string[];
   env: NodeJS.ProcessEnv;
 };
 
+
 // 根据当前环境和安装根目录构建一个重启计划，
 // 如果需要禁用编译缓存以确保兼容性或正确性，
 // 则返回一个包含重启命令、参数和环境变量的计划对象；否则返回 undefined 表示不需要重启。
+type OpenClawCompileCacheRespawnRuntime = {
+  spawn: typeof spawn;
+  attachChildProcessBridge: typeof attachChildProcessBridge;
+  exit: (code?: number) => never;
+  writeError: (message: string) => void;
+};
+
 export function buildOpenClawCompileCacheRespawnPlan(params: {
   currentFile: string;
   env?: NodeJS.ProcessEnv;
@@ -156,15 +168,90 @@ export function respawnWithoutOpenClawCompileCacheIfNeeded(params: {
     return false;
   }
   // 重启
-  const result = spawnSync(plan.command, plan.args, {
+  //const result = spawnSync(plan.command, plan.args, {
+  runOpenClawCompileCacheRespawnPlan(plan);
+  return true;
+}
+
+export function runOpenClawCompileCacheRespawnPlan(
+  plan: OpenClawCompileCacheRespawnPlan,
+  runtime: OpenClawCompileCacheRespawnRuntime = {
+    spawn,
+    attachChildProcessBridge,
+    exit: process.exit.bind(process) as (code?: number) => never,
+    writeError: (message: string) => process.stderr.write(message),
+  },
+): ChildProcess {
+  const child = runtime.spawn(plan.command, plan.args, {
     stdio: "inherit",
     env: plan.env,
   });
-  if (result.error) {
-    throw result.error;
-  }
-  process.exit(result.status ?? 1);
-  return true;
+  // Give the child a moment to honor forwarded signals, then exit the parent so
+  // a child that ignores SIGTERM cannot keep the compile-cache wrapper alive indefinitely.
+  let signalExitTimer: NodeJS.Timeout | undefined;
+  let signalForceKillTimer: NodeJS.Timeout | undefined;
+  const clearSignalExitTimer = (): void => {
+    if (signalExitTimer) {
+      clearTimeout(signalExitTimer);
+      signalExitTimer = undefined;
+    }
+    if (signalForceKillTimer) {
+      clearTimeout(signalForceKillTimer);
+      signalForceKillTimer = undefined;
+    }
+  };
+  const forceKillChild = (): void => {
+    try {
+      child.kill(process.platform === "win32" ? "SIGTERM" : "SIGKILL");
+    } catch {
+      // Best-effort shutdown fallback.
+    }
+  };
+  const requestChildTermination = (): void => {
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // Best-effort shutdown fallback.
+    }
+    signalForceKillTimer = setTimeout(() => {
+      forceKillChild();
+      runtime.exit(1);
+    }, COMPILE_CACHE_RESPAWN_SIGNAL_FORCE_KILL_GRACE_MS);
+    signalForceKillTimer.unref?.();
+  };
+  const scheduleParentExit = (): void => {
+    if (signalExitTimer) {
+      return;
+    }
+    signalExitTimer = setTimeout(() => {
+      requestChildTermination();
+    }, COMPILE_CACHE_RESPAWN_SIGNAL_EXIT_GRACE_MS);
+    signalExitTimer.unref?.();
+  };
+
+  runtime.attachChildProcessBridge(child, {
+    onSignal: scheduleParentExit,
+  });
+
+  child.once("exit", (code, signal) => {
+    clearSignalExitTimer();
+    if (signal) {
+      runtime.exit(1);
+    }
+    runtime.exit(code ?? 1);
+  });
+
+  child.once("error", (error) => {
+    clearSignalExitTimer();
+    runtime.writeError(
+      `[openclaw] Failed to respawn CLI without compile cache: ${
+        error instanceof Error ? (error.stack ?? error.message) : String(error)
+      }\n`,
+    );
+    runtime.exit(1);
+  });
+
+  return child;
 }
 
 export function enableOpenClawCompileCache(params: {

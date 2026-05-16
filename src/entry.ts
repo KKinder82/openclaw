@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
 import process from "node:process";
 import { fileURLToPath } from "node:url";
 import { isRootHelpInvocation } from "./cli/argv.js";
@@ -11,13 +10,12 @@ import {
   resolveEntryInstallRoot,
   respawnWithoutOpenClawCompileCacheIfNeeded,
 } from "./entry.compile-cache.js";
-import { buildCliRespawnPlan } from "./entry.respawn.js";
+import { buildCliRespawnPlan, runCliRespawnPlan } from "./entry.respawn.js";
 import { tryHandleRootVersionFastPath } from "./entry.version-fast-path.js";
 import { isTruthyEnvValue, normalizeEnv } from "./infra/env.js";
 import { isMainModule } from "./infra/is-main.js";
 import { ensureOpenClawExecMarkerOnProcess } from "./infra/openclaw-exec-env.js";
 import { installProcessWarningFilter } from "./infra/warning-filter.js";
-import { attachChildProcessBridge } from "./process/child-process-bridge.js";
 
 const ENTRY_WRAPPER_PAIRS = [
   { wrapperBasename: "openclaw.mjs", entryBasename: "entry.js" },
@@ -96,102 +94,149 @@ if (
   // 主模块，正常执行入口点逻辑。
   const entryFile = fileURLToPath(import.meta.url);
   const installRoot = resolveEntryInstallRoot(entryFile);
-  // 如果需要求重启以禁用编译缓存（例如因为环境不兼容），则在继续之前进行重启。
-  // 如果重启，则就是不执行后续的 CLI 启动流程了；
-  respawnWithoutOpenClawCompileCacheIfNeeded({
+// <<<<<<< HEAD
+//   // 如果需要求重启以禁用编译缓存（例如因为环境不兼容），则在继续之前进行重启。
+//   // 如果重启，则就是不执行后续的 CLI 启动流程了；
+//   respawnWithoutOpenClawCompileCacheIfNeeded({
+//     currentFile: entryFile,
+//     installRoot,
+//   });
+//   //如果不需要重启，则继续正常启动流程。
+//   process.title = "openclaw";
+//   ensureOpenClawExecMarkerOnProcess();
+//   installProcessWarningFilter();
+//   // 标准化环境变量，确保所有环境变量都以一致的格式进行访问和处理。
+//   normalizeEnv();
+//   enableOpenClawCompileCache({
+//     installRoot,
+//   });
+//   gatewayEntryStartupTrace.mark("bootstrap");
+// =======
+
+  const waitingForCompileCacheRespawn = respawnWithoutOpenClawCompileCacheIfNeeded({
     currentFile: entryFile,
     installRoot,
   });
-  //如果不需要重启，则继续正常启动流程。
-  process.title = "openclaw";
-  ensureOpenClawExecMarkerOnProcess();
-  installProcessWarningFilter();
-  // 标准化环境变量，确保所有环境变量都以一致的格式进行访问和处理。
-  normalizeEnv();
-  enableOpenClawCompileCache({
-    installRoot,
-  });
-  gatewayEntryStartupTrace.mark("bootstrap");
+  if (!waitingForCompileCacheRespawn) {
+    process.title = "openclaw";
+    ensureOpenClawExecMarkerOnProcess();
+    installProcessWarningFilter();
+    normalizeEnv();
+// >>>>>>> 74dae6088b1107ecfaca31c91660b309704c1a8a
 
-  if (shouldForceReadOnlyAuthStore(process.argv)) {
-    process.env.OPENCLAW_AUTH_STORE_READONLY = "1";
-  }
+    enableOpenClawCompileCache({
+      installRoot,
+    });
+    gatewayEntryStartupTrace.mark("bootstrap");
 
-  if (process.argv.includes("--no-color")) {
-    process.env.NO_COLOR = "1";
-    process.env.FORCE_COLOR = "0";
-  }
+// <<<<<<< HEAD
+//   if (process.argv.includes("--no-color")) {
+//     process.env.NO_COLOR = "1";
+//     process.env.FORCE_COLOR = "0";
+//   }
 
-  // 保证命令行 重启准备就绪：
-  function ensureCliRespawnReady(): boolean {
-    const plan = buildCliRespawnPlan();
-    if (!plan) {
-      return false;
+//   // 保证命令行 重启准备就绪：
+//   function ensureCliRespawnReady(): boolean {
+//     const plan = buildCliRespawnPlan();
+//     if (!plan) {
+//       return false;
+//     }
+
+//     // 启动
+//     const child = spawn(plan.command, plan.argv, {
+//       stdio: "inherit",
+//       env: plan.env,
+//     });
+
+//     // 将父进程和子进程之间的通信桥接起来，以便在子进程中可以发送消息到父进程，
+//     // 或者在父进程中监听子进程的事件。
+//     attachChildProcessBridge(child);
+
+//     child.once("exit", (code, signal) => {
+//       if (signal) {
+//         process.exitCode = 1;
+//         return;
+// =======
+    if (shouldForceReadOnlyAuthStore(process.argv)) {
+      process.env.OPENCLAW_AUTH_STORE_READONLY = "1";
     }
 
-    // 启动
-    const child = spawn(plan.command, plan.argv, {
-      stdio: "inherit",
-      env: plan.env,
-    });
+    if (process.argv.includes("--no-color")) {
+      process.env.NO_COLOR = "1";
+      process.env.FORCE_COLOR = "0";
+    }
 
-    // 将父进程和子进程之间的通信桥接起来，以便在子进程中可以发送消息到父进程，
-    // 或者在父进程中监听子进程的事件。
-    attachChildProcessBridge(child);
-
-    child.once("exit", (code, signal) => {
-      if (signal) {
-        process.exitCode = 1;
-        return;
+    function ensureCliRespawnReady(): boolean {
+      const plan = buildCliRespawnPlan();
+      if (!plan) {
+        return false;
+// >>>>>>> 74dae6088b1107ecfaca31c91660b309704c1a8a
       }
-      process.exit(code ?? 1);
-    });
 
-    child.once("error", (error) => {
-      console.error(
-        "[openclaw] Failed to respawn CLI:",
-        error instanceof Error ? (error.stack ?? error.message) : error,
-      );
-      process.exit(1);
-    });
+// <<<<<<< HEAD
+//     child.once("error", (error) => {
+//       console.error(
+//         "[openclaw] Failed to respawn CLI:",
+//         error instanceof Error ? (error.stack ?? error.message) : error,
+//       );
+//       process.exit(1);
+//     });
 
-    // Parent must not continue running the CLI.
-    return true;
-  }
+//     // Parent must not continue running the CLI.
+//     return true;
+//   }
 
-  process.argv = normalizeWindowsArgv(process.argv);
+//   process.argv = normalizeWindowsArgv(process.argv);
 
-  if (!ensureCliRespawnReady()) {
-    // 如果没准备好重启时
-    // 解析命令行参数，首先解析容器相关的参数，如果解析失败则输出错误并退出，
-    const parsedContainer = parseCliContainerArgs(process.argv);
-    if (!parsedContainer.ok) {
-      console.error(`[openclaw] ${parsedContainer.error}`);
-      process.exit(2);
+//   if (!ensureCliRespawnReady()) {
+//     // 如果没准备好重启时
+//     // 解析命令行参数，首先解析容器相关的参数，如果解析失败则输出错误并退出，
+//     const parsedContainer = parseCliContainerArgs(process.argv);
+//     if (!parsedContainer.ok) {
+//       console.error(`[openclaw] ${parsedContainer.error}`);
+//       process.exit(2);
+// =======
+      runCliRespawnPlan(plan);
+      // Parent must not continue running the CLI.
+      return true;
+//>>>>>>> 74dae6088b1107ecfaca31c91660b309704c1a8a
     }
 
-    const parsed = parseCliProfileArgs(parsedContainer.argv);
-    if (!parsed.ok) {
-      // Keep it simple; Commander will handle rich help/errors after we strip flags.
-      console.error(`[openclaw] ${parsed.error}`);
-      process.exit(2);
-    }
+    // 标准化命令行参数，
+    // 特别是针对 Windows 平台的参数格式进行调整，以确保在后续的 CLI 启动流程中能够正确解析和处理命令行参数。
+    process.argv = normalizeWindowsArgv(process.argv);
 
-    const containerTargetName = resolveCliContainerTarget(process.argv);
-    if (containerTargetName && parsed.profile) {
-      console.error("[openclaw] --container cannot be combined with --profile/--dev");
-      process.exit(2);
-    }
+    if (!ensureCliRespawnReady()) {
+      // 如果没准备好重启时
+      const parsedContainer = parseCliContainerArgs(process.argv);
+      if (!parsedContainer.ok) {
+        console.error(`[openclaw] ${parsedContainer.error}`);
+        process.exit(2);
+      }
 
-    if (parsed.profile) {
-      applyCliProfileEnv({ profile: parsed.profile });
-      // Keep Commander and ad-hoc argv checks consistent.
-      process.argv = parsed.argv;
-    }
-    gatewayEntryStartupTrace.mark("argv");
+      const parsed = parseCliProfileArgs(parsedContainer.argv);
+      if (!parsed.ok) {
+        // Keep it simple; Commander will handle rich help/errors after we strip flags.
+        console.error(`[openclaw] ${parsed.error}`);
+        process.exit(2);
+      }
 
-    if (!tryHandleRootVersionFastPath(process.argv)) {
-      await runMainOrRootHelp(process.argv);
+      const containerTargetName = resolveCliContainerTarget(process.argv);
+      if (containerTargetName && parsed.profile) {
+        console.error("[openclaw] --container cannot be combined with --profile/--dev");
+        process.exit(2);
+      }
+
+      if (parsed.profile) {
+        applyCliProfileEnv({ profile: parsed.profile });
+        // Keep Commander and ad-hoc argv checks consistent.
+        process.argv = parsed.argv;
+      }
+      gatewayEntryStartupTrace.mark("argv");
+
+      if (!tryHandleRootVersionFastPath(process.argv)) {
+        await runMainOrRootHelp(process.argv);
+      }
     }
   }
 }
@@ -259,10 +304,14 @@ async function runMainOrRootHelp(argv: string[]): Promise<void> {
     // 启动
     await runCli(argv);
   } catch (error) {
-    console.error(
-      "[openclaw] Failed to start CLI:",
-      error instanceof Error ? (error.stack ?? error.message) : error,
-    );
-    process.exitCode = 1;
+    const { formatCliFailureLines } = await import("./cli/failure-output.js");
+    for (const line of formatCliFailureLines({
+      title: "Could not start the CLI.",
+      error,
+      argv,
+    })) {
+      console.error(line);
+    }
+    process.exit(1);
   }
 }
